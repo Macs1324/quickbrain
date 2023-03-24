@@ -428,6 +428,135 @@ impl Div<f64> for Matrix {
     }
 }
 
+// Operator overloading for matrix references
+impl Add<&Matrix> for &Matrix {
+    type Output = Matrix;
+    fn add(self, other: &Matrix) -> Matrix {
+        let mut data = self.data.clone();
+        for i in 0..data.len() {
+            data[i] += other.data[i];
+        }
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        }
+    }
+}
+
+impl Sub<&Matrix> for &Matrix {
+    type Output = Matrix;
+    fn sub(self, other: &Matrix) -> Matrix {
+        let mut data = self.data.clone();
+        for i in 0..data.len() {
+            data[i] -= other.data[i];
+        }
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        }
+    }
+}
+
+impl Mul<&Matrix> for &Matrix {
+    type Output = Matrix;
+    fn mul(self, other: &Matrix) -> Matrix {
+        let mut data = self.data.clone();
+        for i in 0..data.len() {
+            data[i] *= other.data[i];
+        }
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        }
+    }
+}
+
+impl Div<&Matrix> for &Matrix {
+    type Output = Matrix;
+    fn div(self, other: &Matrix) -> Matrix {
+        let mut data = self.data.clone();
+        for i in 0..data.len() {
+            data[i] /= other.data[i];
+        }
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        }
+    }
+}
+
+impl Add<f64> for &Matrix {
+    type Output = Matrix;
+    fn add(self, other: f64) -> Matrix {
+        let mut data = self.data.clone();
+        for i in 0..data.len() {
+            data[i] += other;
+        }
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        }
+    }
+}
+
+impl Sub<f64> for &Matrix {
+    type Output = Matrix;
+    fn sub(self, other: f64) -> Matrix {
+        let mut data = self.data.clone();
+        for i in 0..data.len() {
+            data[i] -= other;
+        }
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        }
+    }
+}
+
+impl Mul<f64> for &Matrix {
+    type Output = Matrix;
+    fn mul(self, other: f64) -> Matrix {
+        let mut data = self.data.clone();
+        for i in 0..data.len() {
+            data[i] *= other;
+        }
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        }
+    }
+}
+
+impl Div<f64> for &Matrix {
+    type Output = Matrix;
+    fn div(self, other: f64) -> Matrix {
+        let mut data = self.data.clone();
+        for i in 0..data.len() {
+            data[i] /= other;
+        }
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data,
+        }
+    }
+}
+
 fn vec_dot(v1: Vec<f64>, v2: Vec<f64>) -> f64 {
     // print!("{:?} . {:?} ", v1, v2);
     let mut r = 0f64;

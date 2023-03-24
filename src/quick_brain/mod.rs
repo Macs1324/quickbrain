@@ -73,22 +73,20 @@ impl Dense {
 
 impl Layer for Dense {
     fn forward(&self, input: &Matrix) -> Matrix {
-        println!("Layer forward pass");
         (self.weight.dot(input).unwrap()).map(self.activation.get_f())
     }
 
     fn backward(&mut self, error: &Matrix) -> Matrix {
         // Calculate the gradient
         let d_bias = error.map(self.activation.get_d());
-        println!("Layer backward pass");
         let d_weight = self.weight.transpose().dot(&d_bias).unwrap();
 
         self.gradient_w = self.gradient_w.clone() + &d_weight;
         self.gradient_b = self.gradient_b.clone() + &d_bias;
 
         // // print the gradients
-        println!("Gradient w: {:?}", self.gradient_w);
-        println!("Gradient b: {:?}", self.gradient_b);
+        // println!("Gradient w: {:?}", self.gradient_w);
+        // println!("Gradient b: {:?}", self.gradient_b);
 
         self.weight.transpose().dot(&error).unwrap()
     }
@@ -201,10 +199,10 @@ impl Sequential {
             println!("Epoch: {}", epoch);
             let y_hat = self.forward(x);
             // print y and yhat
-            println!("y: {:?}", y);
-            println!("y_hat: {:?}", y_hat);
+            // println!("y: {:?}", y);
+            // println!("y_hat: {:?}", y_hat);
             // print the shape of yhat
-            loss = (y.clone() - &y_hat)
+            loss = (y - &y_hat)
                 .map(|x| x * x)
                 .get_data()
                 .iter()
@@ -212,11 +210,13 @@ impl Sequential {
                 .reduce(|a, b| a + b)
                 .unwrap();
             println!("Forward pass complete. Loss: {}", loss);
-            let mut error = (y.clone() - &y_hat).map(|x| 2.0 * x);
+            let mut error = y - &y_hat;
+            error = error.map(|x| x * 2.0);
+
             let numof_layers = self.layers.len();
             for i in (0..numof_layers).rev() {
                 let layer = &mut self.layers[i];
-                y_hat = layer.backward(&grad);
+                error = layer.backward(&error);
             }
 
             for layer in &mut self.layers {
