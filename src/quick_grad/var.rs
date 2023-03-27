@@ -77,6 +77,10 @@ impl<'t> Var<'t> {
         self.value
     }
 
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
     pub fn backward(&self) -> Grad {
         let len = self.tape.nodes.borrow().len();
         let nodes = self.tape.nodes.borrow();
