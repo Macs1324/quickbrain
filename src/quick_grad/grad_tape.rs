@@ -1,16 +1,16 @@
 use super::{node::Node, var::Var};
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 pub struct GradTape {
     pub nodes: RefCell<Vec<Node>>,
-    pub constants: RefCell<Vec<f64>>,
+    pub constants: RefCell<HashMap<u64, Var>>,
 }
 
 impl GradTape {
     pub fn new() -> Self {
         GradTape {
             nodes: RefCell::new(Vec::new()),
-            constants: RefCell::new(Vec::new()),
+            constants: RefCell::new(HashMap::new()),
         }
     }
 

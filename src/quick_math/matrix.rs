@@ -233,10 +233,10 @@ impl Matrix<f64> {
     }
 }
 
-impl<'t> Matrix<Var<'t>> {
+impl Matrix<Var> {
     /// # Random
     /// Creates a new [Matrix] of the given shape and fills it with random values
-    pub fn g_rand(tape: &'t GradTape, rows: usize, cols: usize) -> Matrix<Var<'t>> {
+    pub fn g_rand(tape: &mut GradTape, rows: usize, cols: usize) -> Matrix<Var> {
         let mut data: Vec<Var> = Vec::new();
         for _i in 0..rows * cols {
             data.push(tape.var(random()));
@@ -245,10 +245,10 @@ impl<'t> Matrix<Var<'t>> {
     }
 
     pub fn g_from_array<const R: usize, const C: usize>(
-        tape: &'t GradTape,
+        tape: &mut GradTape,
         arr: [[f64; C]; R],
-    ) -> Matrix<Var<'t>> {
-        let mut data: Vec<Var<'t>> = Vec::new();
+    ) -> Matrix<Var> {
+        let mut data: Vec<Var> = Vec::new();
         for row in arr {
             for element in row {
                 data.push(tape.var(element));
@@ -262,23 +262,23 @@ impl<'t> Matrix<Var<'t>> {
         }
     }
 
-    pub fn g_zero(tape: &'t GradTape, rows: usize, cols: usize) -> Matrix<Var<'t>> {
-        let mut data: Vec<Var<'t>> = Vec::new();
+    pub fn g_zero(tape: &mut GradTape, rows: usize, cols: usize) -> Matrix<Var> {
+        let mut data: Vec<Var> = Vec::new();
         for _i in 0..rows * cols {
             data.push(tape.var(0.0));
         }
         Matrix { rows, cols, data }
     }
 
-    pub fn g_one(tape: &'t GradTape, rows: usize, cols: usize) -> Matrix<Var<'t>> {
-        let mut data: Vec<Var<'t>> = Vec::new();
+    pub fn g_one(tape: &mut GradTape, rows: usize, cols: usize) -> Matrix<Var> {
+        let mut data: Vec<Var> = Vec::new();
         for _i in 0..rows * cols {
             data.push(tape.var(1.0));
         }
         Matrix { rows, cols, data }
     }
 
-    pub fn g_fill(&mut self, tape: &'t GradTape, value: f64) {
+    pub fn g_fill(&mut self, tape: &mut GradTape, value: f64) {
         for i in 0..self.rows * self.cols {
             self.data[i] = tape.var(value);
         }
@@ -286,12 +286,12 @@ impl<'t> Matrix<Var<'t>> {
 
     /// # Dot
     /// Returns the result of a Matrix multiplication operation -> Dot product
-    pub fn g_dot(&self, tape: &'t GradTape, other: &Matrix<Var<'t>>) -> Option<Matrix<Var<'t>>> {
+    pub fn g_dot(&self, tape: &mut GradTape, other: &Matrix<Var>) -> Option<Matrix<Var>> {
         if self.cols != other.get_rows() {
             return None;
         }
 
-        let mut m: Matrix<Var<'t>> = Matrix::g_zero(tape, self.rows, other.cols);
+        let mut m: Matrix<Var> = Matrix::g_zero(tape, self.rows, other.cols);
         for i in 0..self.rows {
             for j in 0..other.cols {
                 // m[(i, j)] = 0f64;
@@ -307,7 +307,7 @@ impl<'t> Matrix<Var<'t>> {
     }
     /// # Transpose
     /// Returns a copy of the transposed matrix
-    pub fn transpose(&self, tape: &'t GradTape) -> Matrix<Var<'t>> {
+    pub fn transpose(&self, tape: &mut GradTape) -> Matrix<Var> {
         let mut r = Matrix::g_zero(tape, self.cols, self.rows);
         for i in 0..self.rows {
             for j in 0..self.cols {
@@ -659,7 +659,7 @@ fn vec_dot(v1: Vec<f64>, v2: Vec<f64>) -> f64 {
     r
 }
 
-fn g_vec_dot<'t>(tape: &'t GradTape, v1: Vec<Var<'t>>, v2: Vec<Var<'t>>) -> Var<'t> {
+fn g_vec_dot(tape: &mut GradTape, v1: Vec<Var>, v2: Vec<Var>) -> Var {
     // print!("{:?} . {:?} ", v1, v2);
     let mut r = tape.var(0.0);
 

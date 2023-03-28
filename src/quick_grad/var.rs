@@ -113,8 +113,8 @@ impl Var {
         self.index
     }
 
-    pub fn tape(&self) -> &GradTape {
-        unsafe { self.tape.as_ref().expect("Failed to get the tape pointer") }
+    pub fn tape(&self) -> &mut GradTape {
+        unsafe { self.tape.as_mut().expect("Failed to get the tape pointer") }
     }
 
     pub fn backward(&self) -> Grad {

@@ -1,6 +1,6 @@
-// pub mod quick_brain;
+pub mod quick_brain;
 pub mod quick_grad;
-// pub mod quick_math;
+pub mod quick_math;
 
 // use indicatif::ProgressBar;
 // use quick_brain::{Dense, Sequential};

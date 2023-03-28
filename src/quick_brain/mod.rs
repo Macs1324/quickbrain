@@ -7,14 +7,14 @@ use crate::{
 };
 pub use activation::Activation;
 
-type Matrix<'t> = RawMatrix<Var<'t>>;
+type Matrix = RawMatrix<Var>;
 
 /// # Layer
 /// A trait that all layers must implement
 pub trait Layer {
     /// # Forward
     /// Performs a forward pass on the layer
-    fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix;
+    fn forward(&self, tape: &mut GradTape, input: &Matrix) -> Matrix;
     /// # Get Activation
     /// Returns the activation function of the layer
     fn get_activation(&self) -> Activation;
@@ -37,13 +37,13 @@ pub trait Layer {
 /// - new: Creates a new Dense layer
 /// - forward: Performs a forward pass on the layer
 /// - get_activation: Returns the activation function of the layer
-pub struct Dense<'t> {
-    pub weight: Matrix<'t>,
-    pub bias: Matrix<'t>,
+pub struct Dense {
+    pub weight: Matrix,
+    pub bias: Matrix,
     pub activation: Activation,
 }
 
-impl<'t> Dense<'t> {
+impl Dense {
     /// # New
     /// Creates a new Dense layer
     /// ## Arguments¨
@@ -53,7 +53,7 @@ impl<'t> Dense<'t> {
     /// ## Returns
     /// A new Dense layer
     pub fn new(
-        tape: &GradTape,
+        tape: &mut GradTape,
         input_size: usize,
         output_size: usize,
         activation: Activation,
@@ -66,8 +66,8 @@ impl<'t> Dense<'t> {
     }
 }
 
-impl<'t> Layer for Dense<'t> {
-    fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix {
+impl Layer for Dense {
+    fn forward(&self, tape: &mut GradTape, input: &Matrix) -> Matrix {
         (self.weight.g_dot(tape, input).unwrap()).map(self.activation.get_f())
     }
 
@@ -128,7 +128,7 @@ impl Sequential {
     /// let input = Matrix::new(vec![vec![2.0, 1.0]]);
     /// let output = model.forward(&input);
     /// ```
-    pub fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix {
+    pub fn forward(&self, tape: &mut GradTape, input: &Matrix) -> Matrix {
         let mut r = input.clone();
 
         let len = self.layers.len();
@@ -165,7 +165,7 @@ impl Sequential {
 
     pub fn fit(
         &mut self,
-        tape: &GradTape,
+        tape: &mut GradTape,
         x: &Matrix,
         y: &Matrix,
         epochs: usize,
@@ -205,31 +205,35 @@ impl Sequential {
 mod test {
     use super::*;
 
-    // #[test]
-    // pub fn mlpp_simple() {
-    //     let mut m = Sequential::new();
-    //     m.add_layer(Dense::new(2, 3, Activation::ReLU));
-    //     m.add_layer(Dense::new(3, 5, Activation::ReLU));
-    //     m.add_layer(Dense::new(5, 5, Activation::ReLU));
-    //     m.add_layer(Dense::new(5, 3, Activation::ReLU));
-    //     m.add_layer(Dense::new(3, 3, Activation::ReLU));
-    //
-    //     let out_shape = m.forward(&Matrix::rand(2, 1)).get_shape();
-    //
-    //     assert_eq!(out_shape, vec![3usize, 1]);
-    // }
-    //
-    // #[test]
-    // pub fn mlpp_simple_multiple_entries() {
-    //     let mut m = Sequential::new();
-    //     m.add_layer(Dense::new(2, 3, Activation::ReLU));
-    //     m.add_layer(Dense::new(3, 5, Activation::ReLU));
-    //     m.add_layer(Dense::new(5, 5, Activation::ReLU));
-    //     m.add_layer(Dense::new(5, 3, Activation::ReLU));
-    //     m.add_layer(Dense::new(3, 3, Activation::ReLU));
-    //
-    //     let out_shape = m.forward(&Matrix::rand(2, 10)).get_shape();
-    //
-    //     assert_eq!(out_shape, vec![3usize, 10]);
-    // }
+    #[test]
+    pub fn mlpp_simple() {
+        let mut t = GradTape::new();
+        let mut m = Sequential::new();
+        m.add_layer(Dense::new(&mut t, 2, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 3, 5, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 5, 5, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 5, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 3, 3, Activation::ReLU));
+
+        let input = Matrix::g_rand(&mut t, 2, 1);
+        let out_shape = m.forward(&mut t, &input).get_shape();
+
+        assert_eq!(out_shape, vec![3usize, 1]);
+    }
+
+    #[test]
+    pub fn mlpp_simple_multiple_entries() {
+        let mut t = GradTape::new();
+        let mut m = Sequential::new();
+        m.add_layer(Dense::new(&mut t, 2, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 3, 5, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 5, 5, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 5, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 3, 3, Activation::ReLU));
+
+        let input = Matrix::g_rand(&mut t, 2, 10);
+        let out_shape = m.forward(&mut t, &input).get_shape();
+
+        assert_eq!(out_shape, vec![3usize, 10]);
+    }
 }
