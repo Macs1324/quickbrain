@@ -3,12 +3,14 @@ use std::cell::RefCell;
 
 pub struct GradTape {
     pub nodes: RefCell<Vec<Node>>,
+    pub constants: RefCell<Vec<f64>>,
 }
 
 impl GradTape {
     pub fn new() -> Self {
         GradTape {
             nodes: RefCell::new(Vec::new()),
+            constants: RefCell::new(Vec::new()),
         }
     }
 
@@ -33,15 +35,17 @@ impl GradTape {
         });
         len
     }
+    pub fn var(&mut self, value: f64) -> Var {
+        let len = {
+            let mut nodes = self.nodes.borrow_mut();
 
-    pub fn var(&self, value: f64) -> Var {
-        let mut nodes = self.nodes.borrow_mut();
-
-        let len = nodes.len();
-        nodes.push(Node {
-            weights: [0.0, 0.0],
-            deps: [0, 0],
-        });
+            let len = nodes.len();
+            nodes.push(Node {
+                weights: [0.0, 0.0],
+                deps: [0, 0],
+            });
+            len
+        };
         Var::new(self, len, value)
     }
 }

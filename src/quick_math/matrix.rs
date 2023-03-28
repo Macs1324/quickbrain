@@ -2,7 +2,7 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Sub};
 
 use rand::random;
 
-use crate::quick_grad::{grad_tape::GradTape, var::Var};
+use crate::quick_grad::{grad::Grad, grad_tape::GradTape, var::Var};
 
 use super::traits::{One, Random, Zero};
 
@@ -43,7 +43,7 @@ pub struct Matrix<T> {
     data: Vec<T>,
 }
 
-impl<T> Matrix<T> {
+impl<T: Copy> Matrix<T> {
     /// # Get Data
     /// Returns a reference to the plain vector holding the raw data of the matrix
     /// Likely not an useful method
@@ -104,27 +104,6 @@ impl<T> Matrix<T> {
         self.cols
     }
 
-    /// # Dot
-    /// Returns the result of a Matrix multiplication operation -> Dot product
-    pub fn dot<U: Mul<T>>(&self, other: &Matrix<U>) -> Option<Matrix<T>> {
-        if self.cols != other.get_rows() {
-            return None;
-        }
-
-        let mut m: Matrix<T> = Matrix::zero(self.rows, other.cols);
-        for i in 0..self.rows {
-            for j in 0..other.cols {
-                m[(i, j)] = 0f64;
-                m[(i, j)] = vec_dot(
-                    self.get_row(i).copied().collect(),
-                    other.get_col(j).copied().collect(),
-                )
-            }
-        }
-
-        Some(m)
-    }
-
     /// # Map
     /// Returns a copy of the matrix with a function f applied to it
     pub fn map(&self, f: fn(T) -> T) -> Matrix<T> {
@@ -156,19 +135,6 @@ impl<T> Matrix<T> {
                 data: self.data.clone(),
             })
         }
-    }
-
-    /// # Transpose
-    /// Returns a copy of the transposed matrix
-    pub fn transpose(&self) -> Matrix<T> {
-        let mut r = Matrix::zero(self.cols, self.rows);
-        for i in 0..self.rows {
-            for j in 0..self.cols {
-                r[(j, i)] = self[(i, j)];
-            }
-        }
-
-        r
     }
 }
 
@@ -233,12 +199,44 @@ impl Matrix<f64> {
             *item = value;
         }
     }
+    /// # Dot
+    /// Returns the result of a Matrix multiplication operation -> Dot product
+    pub fn dot(&self, other: &Matrix<f64>) -> Option<Matrix<f64>> {
+        if self.cols != other.get_rows() {
+            return None;
+        }
+
+        let mut m: Matrix<f64> = Matrix::zero(self.rows, other.cols);
+        for i in 0..self.rows {
+            for j in 0..other.cols {
+                m[(i, j)] = 0f64;
+                m[(i, j)] = vec_dot(
+                    self.get_row(i).copied().collect(),
+                    other.get_col(j).copied().collect(),
+                )
+            }
+        }
+
+        Some(m)
+    }
+    /// # Transpose
+    /// Returns a copy of the transposed matrix
+    pub fn transpose(&self) -> Matrix<f64> {
+        let mut r = Matrix::zero(self.cols, self.rows);
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                r[(j, i)] = self[(i, j)];
+            }
+        }
+
+        r
+    }
 }
 
 impl<'t> Matrix<Var<'t>> {
     /// # Random
     /// Creates a new [Matrix] of the given shape and fills it with random values
-    pub fn random(tape: &GradTape, rows: usize, cols: usize) -> Matrix<Var> {
+    pub fn g_rand(tape: &'t GradTape, rows: usize, cols: usize) -> Matrix<Var<'t>> {
         let mut data: Vec<Var> = Vec::new();
         for _i in 0..rows * cols {
             data.push(tape.var(random()));
@@ -246,14 +244,14 @@ impl<'t> Matrix<Var<'t>> {
         Matrix { rows, cols, data }
     }
 
-    pub fn from_array<const R: usize, const C: usize>(
-        tape: &GradTape,
+    pub fn g_from_array<const R: usize, const C: usize>(
+        tape: &'t GradTape,
         arr: [[f64; C]; R],
-    ) -> Matrix<T> {
+    ) -> Matrix<Var<'t>> {
         let mut data: Vec<Var<'t>> = Vec::new();
         for row in arr {
             for element in row {
-                data.push(element);
+                data.push(tape.var(element));
             }
         }
 
@@ -264,48 +262,82 @@ impl<'t> Matrix<Var<'t>> {
         }
     }
 
-    pub fn zero(tape: &GradTape, rows: usize, cols: usize) -> Matrix<f64> {
-        let mut data: Vec<f64> = Vec::new();
+    pub fn g_zero(tape: &'t GradTape, rows: usize, cols: usize) -> Matrix<Var<'t>> {
+        let mut data: Vec<Var<'t>> = Vec::new();
         for _i in 0..rows * cols {
             data.push(tape.var(0.0));
         }
         Matrix { rows, cols, data }
     }
 
-    pub fn one(tape: &GradTape, rows: usize, cols: usize) -> Matrix<f64> {
-        let mut data: Vec<f64> = Vec::new();
+    pub fn g_one(tape: &'t GradTape, rows: usize, cols: usize) -> Matrix<Var<'t>> {
+        let mut data: Vec<Var<'t>> = Vec::new();
         for _i in 0..rows * cols {
             data.push(tape.var(1.0));
         }
         Matrix { rows, cols, data }
     }
 
-    pub fn fill(&mut self, tape: &GradTape, value: f64) {
+    pub fn g_fill(&mut self, tape: &'t GradTape, value: f64) {
         for i in 0..self.rows * self.cols {
             self.data[i] = tape.var(value);
         }
     }
+
+    /// # Dot
+    /// Returns the result of a Matrix multiplication operation -> Dot product
+    pub fn g_dot(&self, tape: &'t GradTape, other: &Matrix<Var<'t>>) -> Option<Matrix<Var<'t>>> {
+        if self.cols != other.get_rows() {
+            return None;
+        }
+
+        let mut m: Matrix<Var<'t>> = Matrix::g_zero(tape, self.rows, other.cols);
+        for i in 0..self.rows {
+            for j in 0..other.cols {
+                // m[(i, j)] = 0f64;
+                m[(i, j)] = g_vec_dot(
+                    tape,
+                    self.get_row(i).copied().collect(),
+                    other.get_col(j).copied().collect(),
+                )
+            }
+        }
+
+        Some(m)
+    }
+    /// # Transpose
+    /// Returns a copy of the transposed matrix
+    pub fn transpose(&self, tape: &'t GradTape) -> Matrix<Var<'t>> {
+        let mut r = Matrix::g_zero(tape, self.cols, self.rows);
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                r[(j, i)] = self[(i, j)];
+            }
+        }
+
+        r
+    }
 }
 
 impl<T> Index<(usize, usize)> for Matrix<T> {
-    type Output = f64;
+    type Output = T;
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         &self.data[index.0 * self.cols + index.1]
     }
 }
 
 impl<T> IndexMut<(usize, usize)> for Matrix<T> {
-    fn index_mut(&mut self, index: (usize, usize)) -> &mut f64 {
+    fn index_mut(&mut self, index: (usize, usize)) -> &mut T {
         &mut self.data[index.0 * self.cols + index.1]
     }
 }
 
-impl<T, U: Add<T>> Add<Matrix<U>> for Matrix<T> {
+impl<T: Copy + Clone + Add<U, Output = T>, U: Copy + Add<T>> Add<Matrix<U>> for Matrix<T> {
     type Output = Matrix<T>;
     fn add(self, other: Matrix<U>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] += other.data[i];
+            data[i] = data[i] + other.data[i];
         }
 
         Matrix {
@@ -316,12 +348,12 @@ impl<T, U: Add<T>> Add<Matrix<U>> for Matrix<T> {
     }
 }
 
-impl<T> Add<&Matrix<T>> for Matrix<T> {
+impl<T: Copy + Clone + Add<Output = T>> Add<&Matrix<T>> for Matrix<T> {
     type Output = Matrix<T>;
     fn add(self, other: &Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] += other.data[i];
+            data[i] = data[i] + other.data[i];
         }
 
         Matrix {
@@ -332,12 +364,12 @@ impl<T> Add<&Matrix<T>> for Matrix<T> {
     }
 }
 
-impl<T> Add<f64> for Matrix<T> {
+impl<T: Copy + Clone + Add<f64, Output = T>> Add<f64> for Matrix<T> {
     type Output = Matrix<T>;
     fn add(self, other: f64) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] += other;
+            data[i] = data[i] + other;
         }
 
         Matrix {
@@ -348,12 +380,12 @@ impl<T> Add<f64> for Matrix<T> {
     }
 }
 
-impl<T> Sub<Matrix<T>> for Matrix<T> {
+impl<T: Copy + Clone + Sub<Output = T>> Sub<Matrix<T>> for Matrix<T> {
     type Output = Matrix<T>;
     fn sub(self, other: Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] -= other.data[i];
+            data[i] = data[i] - other.data[i];
         }
 
         Matrix {
@@ -363,12 +395,12 @@ impl<T> Sub<Matrix<T>> for Matrix<T> {
         }
     }
 }
-impl<T> Sub<&Matrix<T>> for Matrix<T> {
+impl<T: Copy + Clone + Sub<Output = T>> Sub<&Matrix<T>> for Matrix<T> {
     type Output = Matrix<T>;
     fn sub(self, other: &Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] -= other.data[i];
+            data[i] = data[i] - other.data[i];
         }
 
         Matrix {
@@ -378,12 +410,12 @@ impl<T> Sub<&Matrix<T>> for Matrix<T> {
         }
     }
 }
-impl<T> Sub<f64> for Matrix<T> {
+impl<T: Copy + Clone + Sub<f64, Output = T>> Sub<f64> for Matrix<T> {
     type Output = Matrix<T>;
     fn sub(self, other: f64) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] -= other;
+            data[i] = data[i] - other;
         }
 
         Matrix {
@@ -394,12 +426,12 @@ impl<T> Sub<f64> for Matrix<T> {
     }
 }
 
-impl<T> Mul<Matrix<T>> for Matrix<T> {
+impl<T: Copy + Clone + Mul<Output = T>> Mul<Matrix<T>> for Matrix<T> {
     type Output = Matrix<T>;
     fn mul(self, other: Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] *= other.data[i];
+            data[i] = data[i] * other.data[i];
         }
 
         Matrix {
@@ -409,12 +441,12 @@ impl<T> Mul<Matrix<T>> for Matrix<T> {
         }
     }
 }
-impl<T> Mul<&Matrix<T>> for Matrix<T> {
+impl<T: Copy + Clone + Mul<Output = T>> Mul<&Matrix<T>> for Matrix<T> {
     type Output = Matrix<T>;
     fn mul(self, other: &Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] *= other.data[i];
+            data[i] = data[i] * other.data[i];
         }
 
         Matrix {
@@ -424,12 +456,12 @@ impl<T> Mul<&Matrix<T>> for Matrix<T> {
         }
     }
 }
-impl<T> Mul<f64> for Matrix<T> {
+impl<T: Copy + Clone + Mul<f64, Output = T>> Mul<f64> for Matrix<T> {
     type Output = Matrix<T>;
     fn mul(self, other: f64) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] *= other;
+            data[i] = data[i] * other;
         }
 
         Matrix {
@@ -439,12 +471,12 @@ impl<T> Mul<f64> for Matrix<T> {
         }
     }
 }
-impl<T> Div<Matrix<T>> for Matrix<T> {
+impl<T: Copy + Clone + Div<Output = T>> Div<Matrix<T>> for Matrix<T> {
     type Output = Matrix<T>;
     fn div(self, other: Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] /= other.data[i];
+            data[i] = data[i] / other.data[i];
         }
 
         Matrix {
@@ -454,12 +486,12 @@ impl<T> Div<Matrix<T>> for Matrix<T> {
         }
     }
 }
-impl<T> Div<&Matrix<T>> for Matrix<T> {
+impl<T: Copy + Clone + Div<Output = T>> Div<&Matrix<T>> for Matrix<T> {
     type Output = Matrix<T>;
     fn div(self, other: &Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] /= other.data[i];
+            data[i] = data[i] / other.data[i];
         }
 
         Matrix {
@@ -469,12 +501,12 @@ impl<T> Div<&Matrix<T>> for Matrix<T> {
         }
     }
 }
-impl<T> Div<f64> for Matrix<T> {
+impl<T: Copy + Clone + Div<f64, Output = T>> Div<f64> for Matrix<T> {
     type Output = Matrix<T>;
     fn div(self, other: f64) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] /= other;
+            data[i] = data[i] / other;
         }
 
         Matrix {
@@ -486,12 +518,12 @@ impl<T> Div<f64> for Matrix<T> {
 }
 
 // Operator overloading for matrix references
-impl<T> Add<&Matrix<T>> for &Matrix<T> {
+impl<T: Copy + Clone + Add<Output = T>> Add<&Matrix<T>> for &Matrix<T> {
     type Output = Matrix<T>;
     fn add(self, other: &Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] += other.data[i];
+            data[i] = data[i] + other.data[i];
         }
 
         Matrix {
@@ -502,12 +534,12 @@ impl<T> Add<&Matrix<T>> for &Matrix<T> {
     }
 }
 
-impl<T> Sub<&Matrix<T>> for &Matrix<T> {
+impl<T: Copy + Clone + Add<Output = T>> Sub<&Matrix<T>> for &Matrix<T> {
     type Output = Matrix<T>;
     fn sub(self, other: &Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] -= other.data[i];
+            data[i] = data[i] + other.data[i];
         }
 
         Matrix {
@@ -518,12 +550,12 @@ impl<T> Sub<&Matrix<T>> for &Matrix<T> {
     }
 }
 
-impl<T> Mul<&Matrix<T>> for &Matrix<T> {
+impl<T: Copy + Clone + Mul<Output = T>> Mul<&Matrix<T>> for &Matrix<T> {
     type Output = Matrix<T>;
     fn mul(self, other: &Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] *= other.data[i];
+            data[i] = data[i] * other.data[i];
         }
 
         Matrix {
@@ -534,12 +566,12 @@ impl<T> Mul<&Matrix<T>> for &Matrix<T> {
     }
 }
 
-impl<T> Div<&Matrix<T>> for &Matrix<T> {
+impl<T: Copy + Clone + Div<Output = T>> Div<&Matrix<T>> for &Matrix<T> {
     type Output = Matrix<T>;
     fn div(self, other: &Matrix<T>) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] /= other.data[i];
+            data[i] = data[i] / other.data[i];
         }
 
         Matrix {
@@ -550,12 +582,12 @@ impl<T> Div<&Matrix<T>> for &Matrix<T> {
     }
 }
 
-impl<T> Add<f64> for &Matrix<T> {
+impl<T: Copy + Clone + Add<f64, Output = T>> Add<f64> for &Matrix<T> {
     type Output = Matrix<T>;
     fn add(self, other: f64) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] += other;
+            data[i] = data[i] + other;
         }
 
         Matrix {
@@ -566,12 +598,12 @@ impl<T> Add<f64> for &Matrix<T> {
     }
 }
 
-impl<T> Sub<f64> for &Matrix<T> {
+impl<T: Copy + Clone + Sub<f64, Output = T>> Sub<f64> for &Matrix<T> {
     type Output = Matrix<T>;
     fn sub(self, other: f64) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] -= other;
+            data[i] = data[i] - other;
         }
 
         Matrix {
@@ -582,12 +614,12 @@ impl<T> Sub<f64> for &Matrix<T> {
     }
 }
 
-impl<T> Mul<f64> for &Matrix<T> {
+impl<T: Copy + Clone + Mul<f64, Output = T>> Mul<f64> for &Matrix<T> {
     type Output = Matrix<T>;
     fn mul(self, other: f64) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] *= other;
+            data[i] = data[i] * other;
         }
 
         Matrix {
@@ -598,12 +630,12 @@ impl<T> Mul<f64> for &Matrix<T> {
     }
 }
 
-impl<T> Div<f64> for &Matrix<T> {
+impl<T: Copy + Clone + Div<f64, Output = T>> Div<f64> for &Matrix<T> {
     type Output = Matrix<T>;
     fn div(self, other: f64) -> Matrix<T> {
         let mut data = self.data.clone();
         for i in 0..data.len() {
-            data[i] /= other;
+            data[i] = data[i] / other;
         }
 
         Matrix {
@@ -616,12 +648,113 @@ impl<T> Div<f64> for &Matrix<T> {
 
 fn vec_dot(v1: Vec<f64>, v2: Vec<f64>) -> f64 {
     // print!("{:?} . {:?} ", v1, v2);
-    let mut r = 0f64;
+    let mut r = 0.0;
+
+    let len = v1.len();
+
+    for i in 0..len {
+        r = r + v1[i] * v2[i];
+    }
+    // println!("= {}", r);
+    r
+}
+
+fn g_vec_dot<'t>(tape: &'t GradTape, v1: Vec<Var<'t>>, v2: Vec<Var<'t>>) -> Var<'t> {
+    // print!("{:?} . {:?} ", v1, v2);
+    let mut r = tape.var(0.0);
 
     let len = v1.len();
     for i in 0..len {
-        r += v1[i] * v2[i];
+        r = r + v1[i] * v2[i];
     }
     // println!(" = {}", r);
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn create_matrix() {
+        let _m = Matrix::zero(2, 3);
+    }
+
+    #[test]
+    fn get_row() {
+        let mut m = Matrix::from_array([[1f64, 2f64, 3f64, 4f64], [5f64, 6f64, 7f64, 8f64]]);
+
+        let row: Vec<f64> = m.get_row(0).copied().collect::<Vec<f64>>();
+
+        assert_eq!(row, vec![1f64, 2f64, 3f64, 4f64]);
+        *m.get_row_mut(1).nth(1).unwrap() = 100f64;
+
+        let row: Vec<f64> = m.get_row(1).copied().collect::<Vec<f64>>();
+        assert_eq!(row, vec![5f64, 100f64, 7f64, 8f64]);
+    }
+
+    #[test]
+    fn get_col() {
+        let mut m = Matrix::from_array([[1f64, 2f64, 3f64, 4f64], [5f64, 6f64, 7f64, 8f64]]);
+
+        let col: Vec<f64> = m.get_col(0).copied().collect::<Vec<f64>>();
+
+        assert_eq!(col, vec![1f64, 5f64]);
+
+        *m.get_col_mut(1).nth(1).unwrap() = 100f64;
+
+        let row: Vec<f64> = m.get_col(1).copied().collect::<Vec<f64>>();
+        assert_eq!(row, vec![2f64, 100f64]);
+    }
+
+    #[test]
+    fn map() {
+        let m = Matrix::from_array([[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]]);
+
+        assert_eq!(
+            m.map(|x| x + 2.0f64),
+            Matrix::from_array([[3f64, 4f64, 5f64], [6f64, 7f64, 8f64]])
+        );
+    }
+
+    #[test]
+    fn apply() {
+        let mut m = Matrix::from_array([[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]]);
+
+        m.apply(|x| x + 2.0f64);
+
+        assert_eq!(
+            m,
+            Matrix::from_array([[3f64, 4f64, 5f64], [6f64, 7f64, 8f64]])
+        );
+    }
+
+    #[test]
+    fn reshape() {
+        let m = Matrix::from_array([[1f64, 2f64], [3f64, 4f64], [5f64, 6f64]]);
+
+        assert_eq!(
+            m.reshape(2, 3).unwrap(),
+            Matrix::from_array([[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]])
+        )
+    }
+    #[test]
+    fn transpose() {
+        let m = Matrix::from_array([[1f64, 2f64], [3f64, 4f64], [5f64, 6f64]]);
+
+        assert_eq!(
+            m.transpose(),
+            Matrix::from_array([[1f64, 3f64, 5f64], [2f64, 4f64, 6f64]])
+        )
+    }
+
+    #[test]
+    fn dot() {
+        let m1 = Matrix::from_array([[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]]);
+        let m2 = Matrix::from_array([[1f64, 2f64], [3f64, 4f64], [5f64, 6f64]]);
+
+        assert_eq!(
+            m1.dot(&m2).unwrap(),
+            Matrix::from_array([[22f64, 28f64], [49f64, 64f64]])
+        );
+    }
 }

@@ -1,75 +1,107 @@
-use std::ops::{Add, Div, Mul, Sub};
+use std::{
+    cell::RefCell,
+    fmt::{Debug, Formatter},
+    ops::{Add, Div, Mul, Sub},
+    rc::Rc,
+};
 
 use super::{grad::Grad, grad_tape::GradTape};
 
 #[derive(Clone, Copy)]
-pub struct Var<'t> {
-    tape: &'t GradTape,
+pub struct Var {
+    tape: *mut GradTape, // This has to be refactored!
+    // It defies all the purposes of Rust, and is currently here just because
+    // of ergonomics.
+    // At least wrap it into something in the future
     index: usize,
     value: f64,
 }
 
-impl<'t> Add for Var<'t> {
-    type Output = Var<'t>;
+impl Debug for Var {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value())
+    }
+}
 
-    fn add(self, other: Var<'t>) -> Var<'t> {
-        let tape = self.tape;
+impl Add for Var {
+    type Output = Var;
+
+    fn add(self, other: Var) -> Var {
+        let index = unsafe {
+            self.tape
+                .as_mut()
+                .expect("Cannot get the tape pointer")
+                .push_binary(self.index, other.index, 1.0, 1.0)
+        };
         Var {
             tape: self.tape,
-            index: tape.push_binary(self.index, other.index, 1.0, 1.0),
+            index,
             value: self.value + other.value,
         }
     }
 }
 
-impl<'t> Sub for Var<'t> {
-    type Output = Var<'t>;
+impl Sub for Var {
+    type Output = Var;
 
-    fn sub(self, other: Var<'t>) -> Var<'t> {
-        let tape = self.tape;
-        tape.push_binary(self.index, other.index, 1.0, -1.0);
+    fn sub(self, other: Var) -> Var {
+        let index = unsafe {
+            self.tape
+                .as_mut()
+                .expect("Failed to get the tape pointer")
+                .push_binary(self.index, other.index, 1.0, -1.0)
+        };
         Var {
             tape: self.tape,
-            index: tape.push_binary(self.index, other.index, 1.0, -1.0),
+            index,
             value: self.value - other.value,
         }
     }
 }
 
-impl<'t> Mul for Var<'t> {
-    type Output = Var<'t>;
+impl Mul for Var {
+    type Output = Var;
 
-    fn mul(self, other: Var<'t>) -> Var<'t> {
-        let tape = self.tape;
+    fn mul(self, other: Var) -> Var {
+        let index = unsafe {
+            self.tape
+                .as_mut()
+                .expect("Failed to get the tape pointer")
+                .push_binary(self.index, other.index, other.value, self.value)
+        };
         Var {
             tape: self.tape,
-            index: tape.push_binary(self.index, other.index, other.value, self.value),
+            index,
             value: self.value * other.value,
         }
     }
 }
 
-impl<'t> Div for Var<'t> {
-    type Output = Var<'t>;
+impl Div for Var {
+    type Output = Var;
 
-    fn div(self, other: Var<'t>) -> Var<'t> {
-        let tape = self.tape;
+    fn div(self, other: Var) -> Var {
+        let index = unsafe {
+            self.tape
+                .as_mut()
+                .expect("Failed to get the tape pointer")
+                .push_binary(
+                    self.index,
+                    other.index,
+                    1.0 / other.value,
+                    -self.value / (other.value * other.value),
+                )
+        };
         Var {
             tape: self.tape,
-            index: tape.push_binary(
-                self.index,
-                other.index,
-                1.0 / other.value,
-                -self.value / (other.value * other.value),
-            ),
+            index,
             value: self.value / other.value,
         }
     }
 }
 
-impl<'t> Var<'t> {
-    pub fn new(tape: &'t GradTape, index: usize, value: f64) -> Self {
-        let tape = tape;
+impl Var {
+    pub fn new(tape: &mut GradTape, index: usize, value: f64) -> Self {
         Var { tape, index, value }
     }
 
@@ -81,40 +113,95 @@ impl<'t> Var<'t> {
         self.index
     }
 
-    pub fn backward(&self) -> Grad {
-        let len = self.tape.nodes.borrow().len();
-        let nodes = self.tape.nodes.borrow();
-
-        let mut derivs = vec![0.0; len];
-        derivs[self.index] = 1.0;
-
-        for i in (0..len).rev() {
-            let node = &nodes[i];
-            let deriv = derivs[i];
-
-            for j in 0..2 {
-                derivs[node.deps[j]] += deriv * node.weights[j];
-            }
-        }
-
-        Grad::new(derivs)
+    pub fn tape(&self) -> &GradTape {
+        unsafe { self.tape.as_ref().expect("Failed to get the tape pointer") }
     }
 
-    pub fn sin(self) -> Var<'t> {
-        let tape = self.tape;
+    pub fn backward(&self) -> Grad {
+        unsafe {
+            let len = self
+                .tape
+                .as_ref()
+                .expect("Failed to get tape poinetr")
+                .nodes
+                .borrow()
+                .len();
+            let nodes = self
+                .tape
+                .as_ref()
+                .expect("Failed to get tape pointer")
+                .nodes
+                .borrow();
+
+            let mut derivs = vec![0.0; len];
+            derivs[self.index] = 1.0;
+
+            for i in (0..len).rev() {
+                let node = &nodes[i];
+                let deriv = derivs[i];
+
+                for j in 0..2 {
+                    derivs[node.deps[j]] += deriv * node.weights[j];
+                }
+            }
+
+            Grad::new(derivs)
+        }
+    }
+
+    pub fn sin(self) -> Var {
+        let index = unsafe {
+            self.tape
+                .as_ref()
+                .expect("Failed to get tape pointer")
+                .push_unary(self.index, self.value.cos())
+        };
         Var {
             tape: self.tape,
-            index: tape.push_unary(self.index, self.value.cos()),
+            index,
             value: self.value.sin(),
         }
     }
 
-    pub fn cos(self) -> Var<'t> {
-        let tape = self.tape;
+    pub fn cos(self) -> Var {
+        let index = unsafe {
+            self.tape
+                .as_ref()
+                .expect("Failed to get tape pointer")
+                .push_unary(self.index, -self.value.sin())
+        };
         Var {
             tape: self.tape,
-            index: tape.push_unary(self.index, -self.value.sin()),
+            index,
             value: self.value.cos(),
+        }
+    }
+
+    pub fn tan(self) -> Var {
+        let index = unsafe {
+            self.tape
+                .as_ref()
+                .expect("Failed to get tape pointer")
+                .push_unary(self.index, 1.0 / (self.value.cos() * self.value.cos()))
+        };
+        Var {
+            tape: self.tape,
+            index,
+            value: self.value.tan(),
+        }
+    }
+
+    pub fn exp(self) -> Var {
+        let index = unsafe {
+            self.tape
+                .as_ref()
+                .expect("Failed to get tape pointer")
+                .push_unary(self.index, self.value.exp())
+        };
+        Var {
+            tape: self.tape,
+            index,
+            value: self.value.exp(),
         }
     }
 }
