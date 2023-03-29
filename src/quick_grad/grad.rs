@@ -2,6 +2,7 @@ use std::ops::Index;
 
 use super::var::Var;
 
+#[derive(Debug)]
 pub struct Grad {
     grads: Vec<f64>,
 }

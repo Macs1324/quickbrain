@@ -69,7 +69,7 @@ impl Var {
     }
 
     pub fn cos(self) -> Var {
-        let index = unsafe { self.tape().push_unary(self.index, -self.value.sin()) };
+        let index = self.tape().push_unary(self.index, -self.value.sin());
         Var {
             tape: self.tape,
             index,
@@ -78,10 +78,9 @@ impl Var {
     }
 
     pub fn tan(self) -> Var {
-        let index = unsafe {
-            self.tape()
-                .push_unary(self.index, 1.0 / (self.value.cos() * self.value.cos()))
-        };
+        let index = self
+            .tape()
+            .push_unary(self.index, 1.0 / (self.value.cos() * self.value.cos()));
         Var {
             tape: self.tape,
             index,
@@ -90,7 +89,7 @@ impl Var {
     }
 
     pub fn exp(self) -> Var {
-        let index = unsafe { self.tape().push_unary(self.index, self.value.exp()) };
+        let index = self.tape().push_unary(self.index, self.value.exp());
         Var {
             tape: self.tape,
             index,

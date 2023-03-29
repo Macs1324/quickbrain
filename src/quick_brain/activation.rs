@@ -47,10 +47,5 @@ fn __relu(x: Var) -> Var {
 }
 
 fn __sigmoid(x: Var) -> Var {
-    x.tape().var(1.0) / (x.tape().var(1.0) + (x * x.tape().var(1.0)).exp())
-}
-
-fn __d_sig(x: Var) -> Var {
-    let sig = __sigmoid(x);
-    sig * (x.tape().var(1.0) - sig)
+    1.0 / (1.0 + (-x).exp())
 }

@@ -68,7 +68,7 @@ mod tests {
     fn clear_tape() {
         let t = GradTape::new();
 
-        let x = t.var(3.0);
+        let mut x = t.var(3.0);
 
         let sigmoid = |x: Var| 1.0 / (1.0 + (-x).exp());
         let y = sigmoid(x);
@@ -83,7 +83,7 @@ mod tests {
 
         assert_eq!(round(grad[&x], 5), round(d, 5));
 
-        t.clear();
+        t.clear(vec![&mut x]);
 
         // What if we don't have this?
         // let x = t.var(3.0);
@@ -104,9 +104,9 @@ mod tests {
     fn clear_tape_with_complex_ad() {
         let t = GradTape::new();
 
-        let x = t.var(3.0);
-        let y = t.var(5.0);
-        let z = t.var(7.0);
+        let mut x = t.var(3.0);
+        let mut y = t.var(5.0);
+        let mut z = t.var(7.0);
 
         let r = ((x * y).cos() * (y * z + x).sin()) / x;
         let grad = r.backward();
@@ -122,7 +122,7 @@ mod tests {
         };
         assert_eq!(round(grad[&x], 6), round(d_x, 6)); // Taking into account f64 fuckery
 
-        t.clear();
+        t.clear(vec![&mut x, &mut y, &mut z]);
 
         let r = ((x * y).cos() * (y * z + x).sin()) / x;
         let grad = r.backward();

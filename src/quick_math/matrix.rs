@@ -765,4 +765,17 @@ mod tests {
             Matrix::from_array([[22f64, 28f64], [49f64, 64f64]])
         );
     }
+
+    #[test]
+    fn basic_matrix_differentiation() {
+        let mut t = GradTape::new();
+        let m1 = Matrix::g_from_array(&t, [[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]]);
+        let m2 = Matrix::g_from_array(&t, [[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]]);
+
+        let m3 = &m1 * &m2;
+
+        let grad = m3[(0, 0)].backward();
+
+        assert_eq!(grad[&m2[(1, 2)]], m1[(1, 2)].value());
+    }
 }
