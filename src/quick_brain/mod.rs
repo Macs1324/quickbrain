@@ -2,7 +2,7 @@ pub mod activation;
 pub mod cost;
 
 use crate::{
-    quick_grad::{grad::Grad, grad_tape::GradTape, var::Var},
+    quick_grad::{grad_tape::GradTape, var::Var},
     quick_math::matrix::Matrix as RawMatrix,
 };
 pub use activation::Activation;

@@ -1,5 +1,5 @@
 use super::{node::Node, var::Var};
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, ops::DerefMut};
 
 pub struct GradTape {
     pub nodes: RefCell<Vec<Node>>,
@@ -14,6 +14,14 @@ impl GradTape {
         }
     }
 
+    pub fn clear(&self) {
+        self.constants.borrow_mut().clear();
+        let mut nodes = self.nodes.borrow_mut();
+        for node in nodes.deref_mut() {
+            node.weights = [0.0, 0.0]
+        }
+    }
+
     pub fn push_unary(&self, dep: usize, weight: f64) -> usize {
         let mut nodes = self.nodes.borrow_mut();
 
@@ -21,6 +29,8 @@ impl GradTape {
         nodes.push(Node {
             weights: [weight, 0.0],
             deps: [dep, 0],
+            alive: true,
+            references: 1,
         });
         len
     }
@@ -32,6 +42,8 @@ impl GradTape {
         nodes.push(Node {
             weights: [weight1, weight2],
             deps: [dep1, dep2],
+            alive: true,
+            references: 1,
         });
         len
     }
@@ -43,6 +55,8 @@ impl GradTape {
             nodes.push(Node {
                 weights: [0.0, 0.0],
                 deps: [0, 0],
+                alive: true,
+                references: 1,
             });
             len
         };

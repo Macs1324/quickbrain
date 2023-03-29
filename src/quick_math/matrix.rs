@@ -2,9 +2,7 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Sub};
 
 use rand::random;
 
-use crate::quick_grad::{grad::Grad, grad_tape::GradTape, var::Var};
-
-use super::traits::{One, Random, Zero};
+use crate::quick_grad::{grad_tape::GradTape, var::Var};
 
 /// # Struct **Matrix**
 /// A classic implementation of the Matrix data structure
