@@ -24,6 +24,10 @@ impl Var {
         self.value
     }
 
+    pub fn value_mut(&mut self) -> &mut f64 {
+        &mut self.value
+    }
+
     pub fn index(&self) -> usize {
         self.index
     }

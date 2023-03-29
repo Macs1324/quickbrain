@@ -2,7 +2,7 @@ pub mod activation;
 pub mod cost;
 
 use crate::{
-    quick_grad::{grad_tape::GradTape, var::Var},
+    quick_grad::{grad::Grad, grad_tape::GradTape, var::Var},
     quick_math::matrix::Matrix as RawMatrix,
 };
 pub use activation::Activation;
@@ -14,7 +14,7 @@ type Matrix = RawMatrix<Var>;
 pub trait Layer {
     /// # Forward
     /// Performs a forward pass on the layer
-    fn forward(&self, tape: &mut GradTape, input: &Matrix) -> Matrix;
+    fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix;
     /// # Get Activation
     /// Returns the activation function of the layer
     fn get_activation(&self) -> Activation;
@@ -25,6 +25,8 @@ pub trait Layer {
     /// # Get Output Shape
     /// Returns the output shape of the layer
     fn get_output_shape(&self) -> Vec<usize>;
+
+    fn adjust(&mut self, grad: &Grad, learning_rate: f64);
 }
 
 /// # Dense
@@ -53,7 +55,7 @@ impl Dense {
     /// ## Returns
     /// A new Dense layer
     pub fn new(
-        tape: &mut GradTape,
+        tape: &GradTape,
         input_size: usize,
         output_size: usize,
         activation: Activation,
@@ -67,7 +69,7 @@ impl Dense {
 }
 
 impl Layer for Dense {
-    fn forward(&self, tape: &mut GradTape, input: &Matrix) -> Matrix {
+    fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix {
         (self.weight.g_dot(tape, input).unwrap()).map(self.activation.get_f())
     }
 
@@ -81,6 +83,11 @@ impl Layer for Dense {
 
     fn get_output_shape(&self) -> Vec<usize> {
         vec![self.weight.get_rows(), 1]
+    }
+    fn adjust(&mut self, grad: &Grad, learning_rate: f64) {
+        for w in self.weight.get_data_mut() {
+            *w.value_mut() -= learning_rate * grad[&w];
+        }
     }
 }
 
@@ -128,7 +135,7 @@ impl Sequential {
     /// let input = Matrix::new(vec![vec![2.0, 1.0]]);
     /// let output = model.forward(&input);
     /// ```
-    pub fn forward(&self, tape: &mut GradTape, input: &Matrix) -> Matrix {
+    pub fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix {
         let mut r = input.clone();
 
         let len = self.layers.len();
@@ -165,7 +172,7 @@ impl Sequential {
 
     pub fn fit(
         &mut self,
-        tape: &mut GradTape,
+        tape: &GradTape,
         x: &Matrix,
         y: &Matrix,
         epochs: usize,
@@ -173,7 +180,6 @@ impl Sequential {
     ) {
         let mut loss = tape.var(0.0);
         for epoch in 0..epochs {
-            println!("Epoch: {}", epoch);
             let y_hat = self.forward(tape, x);
             // print y and yhat
             // println!("y: {:?}", y);
@@ -186,16 +192,22 @@ impl Sequential {
                 .copied()
                 .reduce(|a, b| a + b)
                 .unwrap();
-            println!("Forward pass complete. Loss: {}", loss.value());
+            if epoch % 100 == 0 {
+                println!("Epoch: {}", epoch);
+                println!("Forward pass complete. Loss: {}", loss.value());
+            }
             let mut error = y - &y_hat;
             error = error.map(|x| x);
+
+            let grad = loss.backward();
 
             let numof_layers = self.layers.len();
             for i in (0..numof_layers).rev() {
                 let layer = &mut self.layers[i];
+                layer.adjust(&grad, learning_rate);
             }
 
-            for layer in &mut self.layers {}
+            tape.clear();
         }
         println!("Loss: {}", loss.value());
     }
