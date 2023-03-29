@@ -5,13 +5,20 @@ use super::node;
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use crate::quick_grad::grad_tape::GradTape;
+    use crate::quick_grad::{grad_tape::GradTape, var::Var};
 
     use super::*;
 
+    // A helper function to round a f64 to a certain number of decimals
+    // to compare in tests by taking into account float fuckery
+    fn round(x: f64, decimals: i32) -> f64 {
+        let factor = 10.0_f64.powi(decimals as i32);
+        (x * factor).round() / factor as f64
+    }
+
     #[test]
     fn simple_ad() {
-        let mut t = GradTape::new();
+        let t = GradTape::new();
         let x = t.var(3.0);
         let y = t.var(5.0);
 
@@ -25,7 +32,7 @@ mod tests {
 
     #[test]
     fn complex_ad() {
-        let mut t = GradTape::new();
+        let t = GradTape::new();
 
         let x = t.var(3.0);
         let y = t.var(5.0);
@@ -43,6 +50,25 @@ mod tests {
                 - (((y * x).cos() * (x + y * z).sin()) / (x * x))
                 + (((y * x).cos() * (x + y * z).cos()) / x)
         };
-        assert_eq!(grad[&x], d_x - 0.0000000000000001); // Taking into account f64 fuckery
+        assert_eq!(round(grad[&x], 6), round(d_x, 6));
+    }
+    #[test]
+    fn sigmoid_ad_with_constants() {
+        let t = GradTape::new();
+
+        let x = t.var(3.0);
+
+        let sigmoid = |x: Var| 1.0 / (1.0 + (-x).exp());
+        let y = sigmoid(x);
+        let grad = y.backward();
+
+        let d = {
+            let x: f64 = 3.0;
+            let sig = 1.0 / (1.0 + (-x).exp());
+
+            sig * (1.0 - sig)
+        };
+
+        assert_eq!(round(grad[&x], 6), round(d, 6));
     }
 }

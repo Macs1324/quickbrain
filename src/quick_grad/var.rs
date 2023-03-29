@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
     fmt::{Debug, Formatter},
-    ops::{Add, Div, Mul, Sub},
+    ops::{Add, Div, Mul, Neg, Sub},
     rc::Rc,
 };
 
@@ -9,7 +9,7 @@ use super::{grad::Grad, grad_tape::GradTape};
 
 #[derive(Clone, Copy)]
 pub struct Var {
-    tape: *mut GradTape, // This has to be refactored!
+    tape: *const GradTape, // This has to be refactored!
     // It defies all the purposes of Rust, and is currently here just because
     // of ergonomics.
     // At least wrap it into something in the future
@@ -29,7 +29,7 @@ impl Add for Var {
     fn add(self, other: Var) -> Var {
         let index = unsafe {
             self.tape
-                .as_mut()
+                .as_ref()
                 .expect("Cannot get the tape pointer")
                 .push_binary(self.index, other.index, 1.0, 1.0)
         };
@@ -47,7 +47,7 @@ impl Sub for Var {
     fn sub(self, other: Var) -> Var {
         let index = unsafe {
             self.tape
-                .as_mut()
+                .as_ref()
                 .expect("Failed to get the tape pointer")
                 .push_binary(self.index, other.index, 1.0, -1.0)
         };
@@ -65,7 +65,7 @@ impl Mul for Var {
     fn mul(self, other: Var) -> Var {
         let index = unsafe {
             self.tape
-                .as_mut()
+                .as_ref()
                 .expect("Failed to get the tape pointer")
                 .push_binary(self.index, other.index, other.value, self.value)
         };
@@ -83,7 +83,7 @@ impl Div for Var {
     fn div(self, other: Var) -> Var {
         let index = unsafe {
             self.tape
-                .as_mut()
+                .as_ref()
                 .expect("Failed to get the tape pointer")
                 .push_binary(
                     self.index,
@@ -100,8 +100,90 @@ impl Div for Var {
     }
 }
 
+impl Neg for Var {
+    type Output = Var;
+
+    fn neg(self) -> Var {
+        let index = unsafe {
+            self.tape
+                .as_ref()
+                .expect("Failed to get the tape pointer")
+                .push_unary(self.index, -1.0)
+        };
+        Var {
+            tape: self.tape,
+            index,
+            value: -self.value,
+        }
+    }
+}
+
+impl Add<f64> for Var {
+    type Output = Var;
+
+    fn add(self, other: f64) -> Var {
+        self + self.tape().constant(other)
+    }
+}
+
+impl Sub<f64> for Var {
+    type Output = Var;
+
+    fn sub(self, other: f64) -> Var {
+        self - self.tape().constant(other)
+    }
+}
+
+impl Mul<f64> for Var {
+    type Output = Var;
+
+    fn mul(self, other: f64) -> Var {
+        self * self.tape().constant(other)
+    }
+}
+
+impl Div<f64> for Var {
+    type Output = Var;
+
+    fn div(self, other: f64) -> Var {
+        self / self.tape().constant(other)
+    }
+}
+
+impl Add<Var> for f64 {
+    type Output = Var;
+
+    fn add(self, other: Var) -> Var {
+        other + self
+    }
+}
+
+impl Sub<Var> for f64 {
+    type Output = Var;
+
+    fn sub(self, other: Var) -> Var {
+        other.tape().constant(self) - other
+    }
+}
+
+impl Mul<Var> for f64 {
+    type Output = Var;
+
+    fn mul(self, other: Var) -> Var {
+        other * self
+    }
+}
+
+impl Div<Var> for f64 {
+    type Output = Var;
+
+    fn div(self, other: Var) -> Var {
+        other.tape().constant(self) / other
+    }
+}
+
 impl Var {
-    pub fn new(tape: &mut GradTape, index: usize, value: f64) -> Self {
+    pub fn new(tape: &GradTape, index: usize, value: f64) -> Self {
         Var { tape, index, value }
     }
 
@@ -113,8 +195,8 @@ impl Var {
         self.index
     }
 
-    pub fn tape(&self) -> &mut GradTape {
-        unsafe { self.tape.as_mut().expect("Failed to get the tape pointer") }
+    pub fn tape(&self) -> &GradTape {
+        unsafe { self.tape.as_ref().expect("Failed to get the tape pointer") }
     }
 
     pub fn backward(&self) -> Grad {

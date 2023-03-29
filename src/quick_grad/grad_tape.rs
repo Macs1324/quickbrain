@@ -35,7 +35,7 @@ impl GradTape {
         });
         len
     }
-    pub fn var(&mut self, value: f64) -> Var {
+    pub fn var(&self, value: f64) -> Var {
         let len = {
             let mut nodes = self.nodes.borrow_mut();
 
@@ -47,5 +47,16 @@ impl GradTape {
             len
         };
         Var::new(self, len, value)
+    }
+
+    pub fn constant(&self, value: f64) -> Var {
+        let id = value.to_bits();
+        let mut constants = self.constants.borrow_mut();
+        if let Some(var) = constants.get(&id) {
+            return var.clone();
+        }
+        let var = self.var(value);
+        constants.insert(id, var.clone());
+        var
     }
 }
