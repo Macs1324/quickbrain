@@ -8,6 +8,9 @@ use crate::{
     quick_math::matrix::Matrix as RawMatrix,
 };
 pub use activation::Activation;
+use indicatif::ProgressBar;
+
+use self::cost::Cost;
 
 type Matrix = RawMatrix<Var>;
 
@@ -212,24 +215,16 @@ impl Sequential {
         y: &mut Matrix,
         epochs: usize,
         learning_rate: f64,
+        cost: Cost,
     ) {
+        // let pb = ProgressBar::new(epochs as u64);
         for epoch in 0..epochs {
             let y_hat = self.forward(tape, x);
-            let loss = (y_hat - y as &Matrix)
-                .map(|x| x * x)
-                .get_data()
-                .iter()
-                .copied()
-                .reduce(|a, b| a + b)
-                .unwrap();
+            let loss = cost.get_f(y.clone(), y_hat.clone());
+
             let start = Instant::now();
             let grad = loss.backward();
             let end = Instant::now() - start;
-            // if epoch % 1000 == 0 {
-            //     println!("Epoch: {}", epoch);
-            //     println!("Forward pass complete. Loss: {}", loss.value());
-            //     println!("Time to compute gradient: {:?}", end);
-            // }
 
             let numof_layers = self.layers.len();
             for i in (0..numof_layers).rev() {
@@ -245,10 +240,10 @@ impl Sequential {
                 things_to_keep.push(element);
             }
 
-            // SOMETHING IS WRONG WITH CALCULATING THE GRADS FOR BIASES, WEIGHTS WORK FINE!!!!
-
             tape.clear(things_to_keep);
+            // pb.inc(1);
         }
+        // pb.finish_with_message("Training complete!");
         // println!("Loss: {}", loss.value());
     }
 }
@@ -301,25 +296,13 @@ mod test {
 
         let try1 = model.forward(&t, &x);
         println!("Try1: {:?}", try1);
-        let loss1 = (&try1 - &y)
-            .map(|x| x * x)
-            .get_data()
-            .iter()
-            .map(|x| x.value())
-            .reduce(|a, b| a + b)
-            .unwrap();
-        println!("Loss1: {}", loss1);
-        model.fit(&t, &mut x, &mut y, 1000, 0.001);
+        let loss1 = Cost::MSE.get_f(y.clone(), try1.clone());
+        println!("Loss1: {}", loss1.value());
+        model.fit(&t, &mut x, &mut y, 1000, 0.01, Cost::MSE);
         let try2 = model.forward(&t, &x);
         println!("Try2: {:?}", try2);
-        let loss2 = (&try2 - &y)
-            .map(|x| x * x)
-            .get_data()
-            .iter()
-            .map(|x| x.value())
-            .reduce(|a, b| a + b)
-            .unwrap();
-        println!("Loss2: {}", loss2);
-        assert!(loss2 < loss1);
+        let loss2 = Cost::MSE.get_f(y.clone(), try2.clone());
+        println!("Loss2: {}", loss2.value());
+        assert!(loss2.value() < loss1.value());
     }
 }

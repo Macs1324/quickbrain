@@ -3,7 +3,7 @@ pub mod quick_grad;
 pub mod quick_math;
 
 // use indicatif::ProgressBar;
-use quick_brain::{Dense, Sequential};
+use quick_brain::{Dense, Sequential, cost::Cost};
 //
 use crate::{
     quick_grad::{grad_tape::GradTape, var::Var},
@@ -21,7 +21,7 @@ fn xor_example() {
     let mut y: Matrix<Var> = Matrix::g_from_array(&t, [[0.0], [1.0], [1.0], [0.0]]).transpose(&t);
 
     println!("{:?}", model.forward(&t, &x));
-    model.fit(&t, &mut x, &mut y, 100_000, 0.01);
+    model.fit(&t, &mut x, &mut y, 10_000, 0.1, Cost::MSE);
     println!("{:?}", model.forward(&t, &x));
 
     println!("{:?}", model.parameters());
@@ -37,7 +37,7 @@ fn linear_example() {
         Matrix::g_from_array(&t, [[5.0, 11.0], [9.0, 21.0], [13.0, 31.0]]).transpose(&t);
 
     println!("{:?}", model.forward(&t, &x));
-    model.fit(&t, &mut x, &mut y, 10_000, 0.001);
+    model.fit(&t, &mut x, &mut y, 10_000, 0.01, Cost::MSE);
     println!(
         "{:?}",
         model.forward(&t, &Matrix::g_from_array(&t, [[4.0]]).transpose(&t))
