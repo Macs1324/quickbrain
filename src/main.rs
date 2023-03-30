@@ -51,5 +51,5 @@ fn round(x: f64, decimals: i32) -> f64 {
 }
 fn main() {
     xor_example();
-    // linear_example()
+    linear_example()
 }

@@ -225,11 +225,11 @@ impl Sequential {
             let start = Instant::now();
             let grad = loss.backward();
             let end = Instant::now() - start;
-            if epoch % 1000 == 0 {
-                println!("Epoch: {}", epoch);
-                println!("Forward pass complete. Loss: {}", loss.value());
-                println!("Time to compute gradient: {:?}", end);
-            }
+            // if epoch % 1000 == 0 {
+            //     println!("Epoch: {}", epoch);
+            //     println!("Forward pass complete. Loss: {}", loss.value());
+            //     println!("Time to compute gradient: {:?}", end);
+            // }
 
             let numof_layers = self.layers.len();
             for i in (0..numof_layers).rev() {
@@ -287,5 +287,39 @@ mod test {
         let out_shape = m.forward(&mut t, &input).get_shape();
 
         assert_eq!(out_shape, vec![3usize, 10]);
+    }
+
+    #[test]
+    pub fn linear_problem() {
+        let t = GradTape::new();
+        let mut model = Sequential::new();
+        model.add_layer(Dense::new(&t, 1, 2, Activation::NoActivation));
+
+        let mut x: Matrix = Matrix::g_from_array(&t, [[1.0], [2.0], [3.0]]).transpose(&t);
+        let mut y: Matrix =
+            Matrix::g_from_array(&t, [[5.0, 11.0], [9.0, 21.0], [13.0, 31.0]]).transpose(&t);
+
+        let try1 = model.forward(&t, &x);
+        println!("Try1: {:?}", try1);
+        let loss1 = (&try1 - &y)
+            .map(|x| x * x)
+            .get_data()
+            .iter()
+            .map(|x| x.value())
+            .reduce(|a, b| a + b)
+            .unwrap();
+        println!("Loss1: {}", loss1);
+        model.fit(&t, &mut x, &mut y, 1000, 0.001);
+        let try2 = model.forward(&t, &x);
+        println!("Try2: {:?}", try2);
+        let loss2 = (&try2 - &y)
+            .map(|x| x * x)
+            .get_data()
+            .iter()
+            .map(|x| x.value())
+            .reduce(|a, b| a + b)
+            .unwrap();
+        println!("Loss2: {}", loss2);
+        assert!(loss2 < loss1);
     }
 }
