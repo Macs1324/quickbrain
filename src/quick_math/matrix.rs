@@ -1,4 +1,7 @@
-use std::ops::{Add, Div, Index, IndexMut, Mul, Sub};
+use std::{
+    fmt::{write, Debug},
+    ops::{Add, Div, Index, IndexMut, Mul, Sub},
+};
 
 use rand::random;
 
@@ -31,7 +34,7 @@ use crate::quick_grad::{grad_tape::GradTape, var::Var};
 /// // Mapping a function to a matrix
 /// let r = m.dot(m2 * 2.0).map(|x| x.exp());
 /// ```
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Matrix<T> {
     /// The number of rows that the matrix has
     rows: usize,
@@ -39,6 +42,21 @@ pub struct Matrix<T> {
     cols: usize,
     /// Raw vector for the Data contained by the Matrix
     data: Vec<T>,
+}
+
+impl<T: Debug> Debug for Matrix<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut r = String::new();
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                r.push_str(&format!("{:?} ", self.data[i * self.cols + j]));
+            }
+
+            r.push_str("\n");
+        }
+
+        write!(f, "{}", r)
+    }
 }
 
 impl<T: Copy> Matrix<T> {
@@ -136,6 +154,21 @@ impl<T: Copy> Matrix<T> {
                 cols: new_cols,
                 data: self.data.clone(),
             })
+        }
+    }
+
+    pub fn repeat_h(&self, times: usize) -> Matrix<T> {
+        let mut data = vec![];
+        for x in self.data.clone() {
+            for _ in 0..times {
+                data.push(x);
+            }
+        }
+
+        Matrix {
+            rows: self.rows,
+            cols: self.cols * times,
+            data,
         }
     }
 }
@@ -320,6 +353,17 @@ impl Matrix<Var> {
         for i in 0..self.rows {
             for j in 0..self.cols {
                 r[(j, i)] = self[(i, j)];
+            }
+        }
+
+        r
+    }
+
+    pub fn value(&self) -> Matrix<f64> {
+        let mut r = Matrix::zero(self.rows, self.cols);
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                r[(i, j)] = self[(i, j)].value();
             }
         }
 
@@ -768,14 +812,29 @@ mod tests {
 
     #[test]
     fn basic_matrix_differentiation() {
-        let mut t = GradTape::new();
-        let m1 = Matrix::g_from_array(&t, [[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]]);
-        let m2 = Matrix::g_from_array(&t, [[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]]);
+        let t = GradTape::new();
+        let mut m1 = Matrix::g_from_array(&t, [[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]]);
+        let mut m2 = Matrix::g_from_array(&t, [[1f64, 2f64, 3f64], [4f64, 5f64, 6f64]]);
 
         let m3 = &m1 * &m2;
 
-        let grad = m3[(0, 0)].backward();
+        let grad = m3[(1, 2)].backward();
 
+        assert_eq!(grad[&m2[(1, 2)]], m1[(1, 2)].value());
+
+        t.clear({
+            let mut r = Vec::new();
+            for x in m1.get_data_mut() {
+                r.push(x);
+            }
+            for x in m2.get_data_mut() {
+                r.push(x);
+            }
+
+            r
+        });
+        let m3 = &m1 * &m2;
+        let grad = m3[(1, 2)].backward();
         assert_eq!(grad[&m2[(1, 2)]], m1[(1, 2)].value());
     }
 }

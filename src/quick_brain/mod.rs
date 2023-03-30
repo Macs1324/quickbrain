@@ -66,7 +66,7 @@ impl Dense {
     ) -> Dense {
         Dense {
             weight: Matrix::g_rand(tape, output_size, input_size),
-            bias: Matrix::g_rand(tape, output_size, 1),
+            bias: Matrix::g_rand(tape, 1, output_size),
             activation,
         }
     }
@@ -74,7 +74,8 @@ impl Dense {
 
 impl Layer for Dense {
     fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix {
-        (self.weight.g_dot(tape, input).unwrap()).map(self.activation.get_f())
+        (self.weight.g_dot(tape, input).unwrap() + &self.bias.repeat_h(input.get_cols()))
+            .map(self.activation.get_f())
     }
 
     fn get_activation(&self) -> Activation {
@@ -97,11 +98,12 @@ impl Layer for Dense {
             let grad = grad[&b];
             *b.value_mut() -= learning_rate * grad;
         }
-
-        println!("Dense: {:?}", self.bias.get_data()[0].value());
     }
 
     fn parameters(&mut self) -> Vec<&mut Var> {
+        // println!("Dense:");
+        // println!("weight:\n {:?}", self.weight);
+        // println!("bias:\n {:?}", self.bias);
         let mut params = Vec::new();
         for w in self.weight.get_data_mut() {
             params.push(w);
@@ -109,6 +111,7 @@ impl Layer for Dense {
         for b in self.bias.get_data_mut() {
             params.push(b);
         }
+
         params
     }
 }
@@ -205,39 +208,27 @@ impl Sequential {
     pub fn fit(
         &mut self,
         tape: &GradTape,
-        x: &Matrix,
-        y: &Matrix,
+        x: &mut Matrix,
+        y: &mut Matrix,
         epochs: usize,
         learning_rate: f64,
     ) {
-        let mut loss = tape.var(0.0);
         for epoch in 0..epochs {
             let y_hat = self.forward(tape, x);
-            // print y and yhat
-            // println!("y: {:?}", y);
-            // println!("y_hat: {:?}", y_hat);
-            // print the shape of yhat
-            loss = (y - &y_hat)
+            let loss = (y_hat - y as &Matrix)
                 .map(|x| x * x)
                 .get_data()
                 .iter()
                 .copied()
                 .reduce(|a, b| a + b)
                 .unwrap();
-            // let mut error = y - &y_hat;
-            // error = error.map(|x| x);
-
             let start = Instant::now();
             let grad = loss.backward();
-            println!("grad: {:?}", grad);
             let end = Instant::now() - start;
-            if epoch % 1 == 0 {
-                // println!("Epoch: {}", epoch);
-                // println!(
-                //     "Forward pass complete. Loss: {}",
-                //     loss.value() / (y_hat.get_cols() as f64 * y_hat.get_rows() as f64)
-                // );
-                // println!("Time to compute gradient: {:?}", end);
+            if epoch % 1000 == 0 {
+                println!("Epoch: {}", epoch);
+                println!("Forward pass complete. Loss: {}", loss.value());
+                println!("Time to compute gradient: {:?}", end);
             }
 
             let numof_layers = self.layers.len();
@@ -246,7 +237,17 @@ impl Sequential {
                 layer.adjust(&grad, learning_rate);
             }
 
-            tape.clear(self.parameters());
+            let mut things_to_keep = self.parameters();
+            for element in x.get_data_mut() {
+                things_to_keep.push(element);
+            }
+            for element in y.get_data_mut() {
+                things_to_keep.push(element);
+            }
+
+            // SOMETHING IS WRONG WITH CALCULATING THE GRADS FOR BIASES, WEIGHTS WORK FINE!!!!
+
+            tape.clear(things_to_keep);
         }
         // println!("Loss: {}", loss.value());
     }

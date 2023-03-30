@@ -13,33 +13,36 @@ use crate::{
 fn xor_example() {
     let t = GradTape::new();
     let mut model = Sequential::new();
-    model.add_layer(Dense::new(&t, 2, 4, quick_brain::Activation::Sigmoid));
-    model.add_layer(Dense::new(&t, 4, 4, quick_brain::Activation::Sigmoid));
-    model.add_layer(Dense::new(&t, 4, 4, quick_brain::Activation::Sigmoid));
-    model.add_layer(Dense::new(&t, 4, 1, quick_brain::Activation::Sigmoid));
+    model.add_layer(Dense::new(&t, 2, 3, quick_brain::Activation::Sigmoid));
+    model.add_layer(Dense::new(&t, 3, 1, quick_brain::Activation::Sigmoid));
 
-    let x: Matrix<Var> =
+    let mut x: Matrix<Var> =
         Matrix::g_from_array(&t, [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]]).transpose(&t);
-    let y: Matrix<Var> = Matrix::g_from_array(&t, [[0.0], [1.0], [1.0], [0.0]]).transpose(&t);
+    let mut y: Matrix<Var> = Matrix::g_from_array(&t, [[0.0], [1.0], [1.0], [0.0]]).transpose(&t);
 
     println!("{:?}", model.forward(&t, &x));
-    model.fit(&t, &x, &y, 100000, 0.1);
+    model.fit(&t, &mut x, &mut y, 100_000, 0.01);
     println!("{:?}", model.forward(&t, &x));
+
+    println!("{:?}", model.parameters());
 }
 
 fn linear_example() {
     let t = GradTape::new();
     let mut model = Sequential::new();
-    model.add_layer(Dense::new(&t, 1, 1, quick_brain::Activation::ReLU));
-    // model.add_layer(Dense::new(&t, 3, 3, quick_brain::Activation::ReLU));
-    // model.add_layer(Dense::new(&t, 3, 1, quick_brain::Activation::ReLU));
+    model.add_layer(Dense::new(&t, 1, 2, quick_brain::Activation::NoActivation));
 
-    let x: Matrix<Var> = Matrix::g_from_array(&t, [[0.0]]).transpose(&t);
-    let y: Matrix<Var> = Matrix::g_from_array(&t, [[3.0]]).transpose(&t);
+    let mut x: Matrix<Var> = Matrix::g_from_array(&t, [[1.0], [2.0], [3.0]]).transpose(&t);
+    let mut y: Matrix<Var> =
+        Matrix::g_from_array(&t, [[5.0, 11.0], [9.0, 21.0], [13.0, 31.0]]).transpose(&t);
 
     println!("{:?}", model.forward(&t, &x));
-    model.fit(&t, &x, &y, 10000, 0.001);
-    println!("{:?}", model.forward(&t, &x));
+    model.fit(&t, &mut x, &mut y, 10_000, 0.001);
+    println!(
+        "{:?}",
+        model.forward(&t, &Matrix::g_from_array(&t, [[4.0]]).transpose(&t))
+    );
+    println!("{:?}", model.parameters());
 }
 
 fn round(x: f64, decimals: i32) -> f64 {
