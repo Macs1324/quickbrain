@@ -1,25 +1,22 @@
 pub mod activation;
 pub mod cost;
 
-use crate::quick_math::matrix::Matrix;
+use crate::{
+    quick_grad::{grad::Grad, grad_tape::GradTape, var::Var},
+    quick_math::matrix::Matrix as RawMatrix,
+};
 pub use activation::Activation;
+
+use self::cost::Cost;
+
+type Matrix = RawMatrix<Var>;
 
 /// # Layer
 /// A trait that all layers must implement
 pub trait Layer {
     /// # Forward
     /// Performs a forward pass on the layer
-    fn forward(&self, input: &Matrix) -> Matrix;
-
-    /// # Backward
-    /// Backpropagates the cost through the layer
-    /// lr is the learning rate
-    fn backward(&mut self, cost: &Matrix) -> Matrix;
-    /// # Adjust Params
-    /// Adjusts the parameters of the layer based on the gradients calculated in the backward pass
-    /// this is responsible for also clearing the gradients
-    fn adjust_params_and_clean(&mut self, learning_rate: f64);
-
+    fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix;
     /// # Get Activation
     /// Returns the activation function of the layer
     fn get_activation(&self) -> Activation;
@@ -30,6 +27,12 @@ pub trait Layer {
     /// # Get Output Shape
     /// Returns the output shape of the layer
     fn get_output_shape(&self) -> Vec<usize>;
+
+    fn adjust(&mut self, grad: &Grad, learning_rate: f64);
+
+    /// # Get Parameters
+    ///
+    fn parameters(&mut self) -> Vec<&mut Var>;
 }
 
 /// # Dense
@@ -46,9 +49,6 @@ pub struct Dense {
     pub weight: Matrix,
     pub bias: Matrix,
     pub activation: Activation,
-
-    gradient_w: Matrix,
-    gradient_b: Matrix,
 }
 
 impl Dense {
@@ -60,47 +60,24 @@ impl Dense {
     /// - activation: The activation function of the layer
     /// ## Returns
     /// A new Dense layer
-    pub fn new(input_size: usize, output_size: usize, activation: Activation) -> Dense {
+    pub fn new(
+        tape: &GradTape,
+        input_size: usize,
+        output_size: usize,
+        activation: Activation,
+    ) -> Dense {
         Dense {
-            weight: Matrix::rand(output_size, input_size) * 2.0 - 1.0,
-            bias: Matrix::rand(output_size, 1) * 2.0 - 1.0,
+            weight: Matrix::g_rand(tape, output_size, input_size),
+            bias: Matrix::g_rand(tape, 1, output_size),
             activation,
-            gradient_w: Matrix::zero(output_size, input_size),
-            gradient_b: Matrix::zero(output_size, 1),
         }
     }
 }
 
 impl Layer for Dense {
-    fn forward(&self, input: &Matrix) -> Matrix {
-        println!("Layer forward pass");
-        (self.weight.dot(input).unwrap()).map(self.activation.get_f())
-    }
-
-    fn backward(&mut self, error: &Matrix) -> Matrix {
-        // Calculate the gradient
-        let d_bias = error.map(self.activation.get_d());
-        println!("Layer backward pass");
-        let d_weight = self.weight.transpose().dot(&d_bias).unwrap();
-
-        self.gradient_w = self.gradient_w.clone() + &d_weight;
-        self.gradient_b = self.gradient_b.clone() + &d_bias;
-
-        // // print the gradients
-        println!("Gradient w: {:?}", self.gradient_w);
-        println!("Gradient b: {:?}", self.gradient_b);
-
-        self.weight.transpose().dot(&error).unwrap()
-    }
-
-    fn adjust_params_and_clean(&mut self, learning_rate: f64) {
-        // adjust the parameters
-        self.weight = self.weight.clone() - &(self.gradient_w.clone() * learning_rate);
-        self.bias = self.bias.clone() - &(self.gradient_b.clone() * learning_rate);
-
-        // clean the gradients
-        self.gradient_b = Matrix::zero(self.gradient_b.get_rows(), self.gradient_b.get_cols());
-        self.gradient_w = Matrix::zero(self.gradient_w.get_rows(), self.gradient_w.get_cols());
+    fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix {
+        (self.weight.g_dot(tape, input).unwrap() + &self.bias.repeat_h(input.get_cols()))
+            .map(self.activation.get_f())
     }
 
     fn get_activation(&self) -> Activation {
@@ -113,6 +90,31 @@ impl Layer for Dense {
 
     fn get_output_shape(&self) -> Vec<usize> {
         vec![self.weight.get_rows(), 1]
+    }
+    fn adjust(&mut self, grad: &Grad, learning_rate: f64) {
+        for w in self.weight.get_data_mut() {
+            let grad = grad[&w];
+            *w.value_mut() -= learning_rate * grad;
+        }
+        for b in self.bias.get_data_mut() {
+            let grad = grad[&b];
+            *b.value_mut() -= learning_rate * grad;
+        }
+    }
+
+    fn parameters(&mut self) -> Vec<&mut Var> {
+        // println!("Dense:");
+        // println!("weight:\n {:?}", self.weight);
+        // println!("bias:\n {:?}", self.bias);
+        let mut params = Vec::new();
+        for w in self.weight.get_data_mut() {
+            params.push(w);
+        }
+        for b in self.bias.get_data_mut() {
+            params.push(b);
+        }
+
+        params
     }
 }
 
@@ -160,12 +162,12 @@ impl Sequential {
     /// let input = Matrix::new(vec![vec![2.0, 1.0]]);
     /// let output = model.forward(&input);
     /// ```
-    pub fn forward(&self, input: &Matrix) -> Matrix {
+    pub fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix {
         let mut r = input.clone();
 
         let len = self.layers.len();
         for i in 0..len {
-            r = self.layers[i].forward(&r);
+            r = self.layers[i].forward(tape, &r);
         }
 
         r
@@ -195,35 +197,66 @@ impl Sequential {
         self.layers[self.layers.len() - 1].get_output_shape()
     }
 
-    pub fn fit(&mut self, x: &Matrix, y: &Matrix, epochs: usize, learning_rate: f64) {
-        let mut loss = 0.0;
-        for epoch in 0..epochs {
-            println!("Epoch: {}", epoch);
-            let y_hat = self.forward(x);
-            // print y and yhat
-            println!("y: {:?}", y);
-            println!("y_hat: {:?}", y_hat);
-            // print the shape of yhat
-            loss = (y.clone() - &y_hat)
-                .map(|x| x * x)
-                .get_data()
-                .iter()
-                .copied()
-                .reduce(|a, b| a + b)
-                .unwrap();
-            println!("Forward pass complete. Loss: {}", loss);
-            let mut error = (y.clone() - &y_hat).map(|x| 2.0 * x);
+    /// # Parameters
+    /// Returns a vector of the parameters of the model
+    /// ```
+    /// let mut model = Sequential::new();
+    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
+    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
+    /// let params = model.parameters();
+    /// ```
+    pub fn parameters(&mut self) -> Vec<&mut Var> {
+        let mut params = vec![];
+        for layer in self.layers.iter_mut() {
+            for param in layer.parameters() {
+                params.push(param);
+            }
+        }
+        params
+    }
+
+    /// # Fit
+    /// Trains the model on the given dataset
+    /// ```
+    /// let mut model = Sequential::new();
+    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
+    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
+    /// let mut x = Matrix::new(vec![vec![2.0, 1.0]]);
+    /// let mut y = Matrix::new(vec![vec![1.0]]);
+    /// model.fit(&mut x, &mut y, 100, 0.1, Cost::MSE);
+    /// ```
+    pub fn fit(
+        &mut self,
+        tape: &GradTape,
+        x: &mut Matrix,
+        y: &mut Matrix,
+        epochs: usize,
+        learning_rate: f64,
+        cost: Cost,
+    ) {
+        // let pb = ProgressBar::new(epochs as u64);
+        for _ in 0..epochs {
+            let y_hat = self.forward(tape, x);
+            let loss = cost.get_f(y.clone(), y_hat.clone());
+
+            let grad = loss.backward();
+
             let numof_layers = self.layers.len();
             for i in (0..numof_layers).rev() {
                 let layer = &mut self.layers[i];
-                y_hat = layer.backward(&grad);
+                layer.adjust(&grad, learning_rate);
             }
 
-            for layer in &mut self.layers {
-                layer.adjust_params_and_clean(learning_rate);
+            let mut things_to_keep = self.parameters();
+            for element in x.get_data_mut() {
+                things_to_keep.push(element);
             }
+            for element in y.get_data_mut() {
+                things_to_keep.push(element);
+            }
+
+            tape.clear(things_to_keep);
         }
-        println!("Loss: {}", loss);
     }
 }
 
@@ -233,29 +266,80 @@ mod test {
 
     #[test]
     pub fn mlpp_simple() {
+        let mut t = GradTape::new();
         let mut m = Sequential::new();
-        m.add_layer(Dense::new(2, 3, Activation::ReLU));
-        m.add_layer(Dense::new(3, 5, Activation::ReLU));
-        m.add_layer(Dense::new(5, 5, Activation::ReLU));
-        m.add_layer(Dense::new(5, 3, Activation::ReLU));
-        m.add_layer(Dense::new(3, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 2, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 3, 5, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 5, 5, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 5, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 3, 3, Activation::ReLU));
 
-        let out_shape = m.forward(&Matrix::rand(2, 1)).get_shape();
+        let input = Matrix::g_rand(&mut t, 2, 1);
+        let out_shape = m.forward(&mut t, &input).get_shape();
 
         assert_eq!(out_shape, vec![3usize, 1]);
     }
 
     #[test]
     pub fn mlpp_simple_multiple_entries() {
+        let mut t = GradTape::new();
         let mut m = Sequential::new();
-        m.add_layer(Dense::new(2, 3, Activation::ReLU));
-        m.add_layer(Dense::new(3, 5, Activation::ReLU));
-        m.add_layer(Dense::new(5, 5, Activation::ReLU));
-        m.add_layer(Dense::new(5, 3, Activation::ReLU));
-        m.add_layer(Dense::new(3, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 2, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 3, 5, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 5, 5, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 5, 3, Activation::ReLU));
+        m.add_layer(Dense::new(&mut t, 3, 3, Activation::ReLU));
 
-        let out_shape = m.forward(&Matrix::rand(2, 10)).get_shape();
+        let input = Matrix::g_rand(&mut t, 2, 10);
+        let out_shape = m.forward(&mut t, &input).get_shape();
 
         assert_eq!(out_shape, vec![3usize, 10]);
+    }
+
+    #[test]
+    pub fn linear_problem() {
+        let t = GradTape::new();
+        let mut model = Sequential::new();
+        model.add_layer(Dense::new(&t, 1, 2, Activation::NoActivation));
+
+        let mut x: Matrix = Matrix::g_from_array(&t, [[1.0], [2.0], [3.0]]).transpose(&t);
+        let mut y: Matrix =
+            Matrix::g_from_array(&t, [[5.0, 11.0], [9.0, 21.0], [13.0, 31.0]]).transpose(&t);
+
+        let try1 = model.forward(&t, &x);
+        println!("Try1: {:?}", try1);
+        let loss1 = Cost::MSE.get_f(y.clone(), try1.clone());
+        println!("Loss1: {}", loss1.value());
+        model.fit(&t, &mut x, &mut y, 1000, 0.01, Cost::MSE);
+        let try2 = model.forward(&t, &x);
+        println!("Try2: {:?}", try2);
+        let loss2 = Cost::MSE.get_f(y.clone(), try2.clone());
+        println!("Loss2: {}", loss2.value());
+        assert!(loss2.value() < loss1.value());
+    }
+
+    #[test]
+    pub fn xor_problem() {
+        let t = GradTape::new();
+        let mut model = Sequential::new();
+        model.add_layer(Dense::new(&t, 2, 3, Activation::Sigmoid));
+        model.add_layer(Dense::new(&t, 3, 1, Activation::Sigmoid));
+
+        let mut x: Matrix =
+            Matrix::g_from_array(&t, [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]])
+                .transpose(&t);
+        let mut y: Matrix = Matrix::g_from_array(&t, [[0.0], [1.0], [1.0], [0.0]]).transpose(&t);
+
+        let try1 = model.forward(&t, &x);
+        println!("{:?}", try1.get_shape());
+        println!("Try1: {:?}", try1);
+        let loss1 = Cost::MSE.get_f(y.clone(), try1.clone());
+        println!("Loss1: {}", loss1.value());
+        model.fit(&t, &mut x, &mut y, 1000, 0.01, Cost::MSE);
+        let try2 = model.forward(&t, &x);
+        println!("Try2: {:?}", try2);
+        let loss2 = Cost::MSE.get_f(y.clone(), try2.clone());
+        println!("Loss2: {}", loss2.value());
+        assert!(loss2.value() < loss1.value());
     }
 }
