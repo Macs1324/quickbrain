@@ -1,14 +1,11 @@
 pub mod activation;
 pub mod cost;
 
-use std::time::Instant;
-
 use crate::{
     quick_grad::{grad::Grad, grad_tape::GradTape, var::Var},
     quick_math::matrix::Matrix as RawMatrix,
 };
 pub use activation::Activation;
-use indicatif::ProgressBar;
 
 use self::cost::Cost;
 
@@ -33,6 +30,8 @@ pub trait Layer {
 
     fn adjust(&mut self, grad: &Grad, learning_rate: f64);
 
+    /// # Get Parameters
+    ///
     fn parameters(&mut self) -> Vec<&mut Var>;
 }
 
@@ -198,6 +197,14 @@ impl Sequential {
         self.layers[self.layers.len() - 1].get_output_shape()
     }
 
+    /// # Parameters
+    /// Returns a vector of the parameters of the model
+    /// ```
+    /// let mut model = Sequential::new();
+    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
+    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
+    /// let params = model.parameters();
+    /// ```
     pub fn parameters(&mut self) -> Vec<&mut Var> {
         let mut params = vec![];
         for layer in self.layers.iter_mut() {
@@ -208,6 +215,16 @@ impl Sequential {
         params
     }
 
+    /// # Fit
+    /// Trains the model on the given dataset
+    /// ```
+    /// let mut model = Sequential::new();
+    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
+    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
+    /// let mut x = Matrix::new(vec![vec![2.0, 1.0]]);
+    /// let mut y = Matrix::new(vec![vec![1.0]]);
+    /// model.fit(&mut x, &mut y, 100, 0.1, Cost::MSE);
+    /// ```
     pub fn fit(
         &mut self,
         tape: &GradTape,
@@ -218,13 +235,11 @@ impl Sequential {
         cost: Cost,
     ) {
         // let pb = ProgressBar::new(epochs as u64);
-        for epoch in 0..epochs {
+        for _ in 0..epochs {
             let y_hat = self.forward(tape, x);
             let loss = cost.get_f(y.clone(), y_hat.clone());
 
-            let start = Instant::now();
             let grad = loss.backward();
-            let end = Instant::now() - start;
 
             let numof_layers = self.layers.len();
             for i in (0..numof_layers).rev() {
@@ -241,10 +256,7 @@ impl Sequential {
             }
 
             tape.clear(things_to_keep);
-            // pb.inc(1);
         }
-        // pb.finish_with_message("Training complete!");
-        // println!("Loss: {}", loss.value());
     }
 }
 
@@ -295,6 +307,31 @@ mod test {
             Matrix::g_from_array(&t, [[5.0, 11.0], [9.0, 21.0], [13.0, 31.0]]).transpose(&t);
 
         let try1 = model.forward(&t, &x);
+        println!("Try1: {:?}", try1);
+        let loss1 = Cost::MSE.get_f(y.clone(), try1.clone());
+        println!("Loss1: {}", loss1.value());
+        model.fit(&t, &mut x, &mut y, 1000, 0.01, Cost::MSE);
+        let try2 = model.forward(&t, &x);
+        println!("Try2: {:?}", try2);
+        let loss2 = Cost::MSE.get_f(y.clone(), try2.clone());
+        println!("Loss2: {}", loss2.value());
+        assert!(loss2.value() < loss1.value());
+    }
+
+    #[test]
+    pub fn xor_problem() {
+        let t = GradTape::new();
+        let mut model = Sequential::new();
+        model.add_layer(Dense::new(&t, 2, 3, Activation::Sigmoid));
+        model.add_layer(Dense::new(&t, 3, 1, Activation::Sigmoid));
+
+        let mut x: Matrix =
+            Matrix::g_from_array(&t, [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]])
+                .transpose(&t);
+        let mut y: Matrix = Matrix::g_from_array(&t, [[0.0], [1.0], [1.0], [0.0]]).transpose(&t);
+
+        let try1 = model.forward(&t, &x);
+        println!("{:?}", try1.get_shape());
         println!("Try1: {:?}", try1);
         let loss1 = Cost::MSE.get_f(y.clone(), try1.clone());
         println!("Loss1: {}", loss1.value());

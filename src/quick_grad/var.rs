@@ -16,22 +16,32 @@ pub struct Var {
 }
 
 impl Var {
+    /// # New
+    /// Creates a new variable
     pub fn new(tape: &GradTape, index: usize, value: f64) -> Self {
         Var { tape, index, value }
     }
 
+    /// # Value
+    /// Gets a copy of the value of the variable
     pub fn value(&self) -> f64 {
         self.value
     }
 
+    /// # Value Mut
+    /// Gets a mutable reference to the value of the variable
     pub fn value_mut(&mut self) -> &mut f64 {
         &mut self.value
     }
 
+    /// # Index
+    /// Gets the index of the variable in the computation graph
     pub fn index(&self) -> usize {
         self.index
     }
 
+    /// # Tape
+    /// Gets a reference to the taph the variable sits on
     pub fn tape(&self) -> &GradTape {
         unsafe {
             self.tape
@@ -40,6 +50,10 @@ impl Var {
         }
     }
 
+    /// # Backward
+    /// Performs the backward pass of the computation graph
+    /// ## Returns
+    /// A vector of gradients
     pub fn backward(&self) -> Grad {
         let len = self.tape().nodes.borrow().len();
         let nodes = self.tape().nodes.borrow();
@@ -59,6 +73,8 @@ impl Var {
         Grad::new(derivs)
     }
 
+    /// # Sin
+    /// Calculates the sine of the variable
     pub fn sin(self) -> Var {
         let index = self.tape().push_unary(self.index, self.value.cos());
         Var {
@@ -68,6 +84,8 @@ impl Var {
         }
     }
 
+    /// # Cos
+    /// Calculates the cosine of the variable
     pub fn cos(self) -> Var {
         let index = self.tape().push_unary(self.index, -self.value.sin());
         Var {
@@ -77,6 +95,8 @@ impl Var {
         }
     }
 
+    /// # Tan
+    /// Calculates the tangent of the variable
     pub fn tan(self) -> Var {
         let index = self
             .tape()
@@ -88,6 +108,8 @@ impl Var {
         }
     }
 
+    /// # Exp
+    /// Calculates the exponential of the variable
     pub fn exp(self) -> Var {
         let index = self.tape().push_unary(self.index, self.value.exp());
         Var {
@@ -97,6 +119,8 @@ impl Var {
         }
     }
 }
+
+// ---------------------------------------------------------        OPERATOR OVERLOADING
 
 impl Debug for Var {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

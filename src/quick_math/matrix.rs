@@ -7,6 +7,8 @@ use rand::random;
 
 use crate::quick_grad::{grad_tape::GradTape, var::Var};
 
+use super::errors::MatrixError;
+
 /// # Struct **Matrix**
 /// A classic implementation of the Matrix data structure
 ///
@@ -143,13 +145,16 @@ impl<T: Copy> Matrix<T> {
     }
 
     /// # Reshape
-    /// Returns [None] if the data doesn't fit the new size
+    /// Returns [MatrixError::InvalidReshape] if the data doesn't fit the new size
     /// Returns the reshaped matrix otherwise
-    pub fn reshape(&self, new_rows: usize, new_cols: usize) -> Option<Matrix<T>> {
+    pub fn reshape(&self, new_rows: usize, new_cols: usize) -> Result<Matrix<T>, MatrixError> {
         if (self.rows * self.cols) != (new_rows * new_cols) {
-            None
+            Err(MatrixError::InvalidReshape {
+                numel: self.get_rows() * self.get_cols(),
+                forcing_into: new_rows * new_cols,
+            })
         } else {
-            Some(Matrix {
+            Ok(Matrix {
                 rows: new_rows,
                 cols: new_cols,
                 data: self.data.clone(),
@@ -157,6 +162,8 @@ impl<T: Copy> Matrix<T> {
         }
     }
 
+    // # Repeat
+    // Replicates the matrix by copying its columns N times
     pub fn repeat_h(&self, times: usize) -> Matrix<T> {
         let mut data = vec![];
         for x in self.data.clone() {
@@ -236,9 +243,12 @@ impl Matrix<f64> {
     }
     /// # Dot
     /// Returns the result of a Matrix multiplication operation -> Dot product
-    pub fn dot(&self, other: &Matrix<f64>) -> Option<Matrix<f64>> {
+    pub fn dot(&self, other: &Matrix<f64>) -> Result<Matrix<f64>, MatrixError> {
         if self.cols != other.get_rows() {
-            return None;
+            return Err(MatrixError::MatMulDimensionsMismatch {
+                size_1: self.get_shape(),
+                size_2: other.get_shape(),
+            });
         }
 
         let mut m: Matrix<f64> = Matrix::zero(self.rows, other.cols);
@@ -252,7 +262,7 @@ impl Matrix<f64> {
             }
         }
 
-        Some(m)
+        Ok(m)
     }
     /// # Transpose
     /// Returns a copy of the transposed matrix
@@ -303,6 +313,8 @@ impl Matrix<Var> {
         }
     }
 
+    /// # G Zero
+    /// Creates a new [Matrix] of the given shape and fills it with ZERO [Var]s
     pub fn g_zero(tape: &GradTape, rows: usize, cols: usize) -> Matrix<Var> {
         let mut data: Vec<Var> = Vec::new();
         for _i in 0..rows * cols {
@@ -311,6 +323,8 @@ impl Matrix<Var> {
         Matrix { rows, cols, data }
     }
 
+    /// # G One
+    /// Creates a new [Matrix] of the given shape and fills it with ONE [Var]s
     pub fn g_one(tape: &GradTape, rows: usize, cols: usize) -> Matrix<Var> {
         let mut data: Vec<Var> = Vec::new();
         for _i in 0..rows * cols {
@@ -319,6 +333,8 @@ impl Matrix<Var> {
         Matrix { rows, cols, data }
     }
 
+    /// # G Fill
+    /// Mutates the matrix by filling it with the given value
     pub fn g_fill(&mut self, tape: &GradTape, value: f64) {
         for i in 0..self.rows * self.cols {
             self.data[i] = tape.var(value);
@@ -327,9 +343,12 @@ impl Matrix<Var> {
 
     /// # Dot
     /// Returns the result of a Matrix multiplication operation -> Dot product
-    pub fn g_dot(&self, tape: &GradTape, other: &Matrix<Var>) -> Option<Matrix<Var>> {
+    pub fn g_dot(&self, tape: &GradTape, other: &Matrix<Var>) -> Result<Matrix<Var>, MatrixError> {
         if self.cols != other.get_rows() {
-            return None;
+            return Err(MatrixError::MatMulDimensionsMismatch {
+                size_1: self.get_shape(),
+                size_2: other.get_shape(),
+            });
         }
 
         let mut m: Matrix<Var> = Matrix::g_zero(tape, self.rows, other.cols);
@@ -344,7 +363,7 @@ impl Matrix<Var> {
             }
         }
 
-        Some(m)
+        Ok(m)
     }
     /// # Transpose
     /// Returns a copy of the transposed matrix
@@ -359,6 +378,8 @@ impl Matrix<Var> {
         r
     }
 
+    /// # Value
+    /// Returns a copy of the matrix with all the variables replaced with their values
     pub fn value(&self) -> Matrix<f64> {
         let mut r = Matrix::zero(self.rows, self.cols);
         for i in 0..self.rows {

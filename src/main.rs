@@ -3,7 +3,7 @@ pub mod quick_grad;
 pub mod quick_math;
 
 // use indicatif::ProgressBar;
-use quick_brain::{Dense, Sequential, cost::Cost};
+use quick_brain::{cost::Cost, Dense, Sequential};
 //
 use crate::{
     quick_grad::{grad_tape::GradTape, var::Var},

@@ -2,6 +2,8 @@ use std::ops::Index;
 
 use super::var::Var;
 
+/// # Grad
+/// A struct that holds the gradients of the variables
 #[derive(Debug)]
 pub struct Grad {
     grads: Vec<f64>,
