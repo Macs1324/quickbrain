@@ -1,5 +1,5 @@
 use std::{
-    fmt::{write, Debug},
+    fmt::Debug,
     ops::{Add, Div, Index, IndexMut, Mul, Sub},
 };
 
@@ -23,10 +23,11 @@ use super::errors::MatrixError;
 /// ---
 /// ### A demonstration
 /// ```
-/// let m = Matrix::from_array([[1, 2, 3], [4, 5, 6]]);
+/// use quickbrain::quick_math::matrix::Matrix;
+/// let m : Matrix<f64> = Matrix::from_array([[1., 2., 3.], [4., 5., 6.]]);
 /// // [1, 2, 3]
 /// // [4, 5, 6]
-/// let m2 = Matrix::from_array([[1, 2], [3, 4], [5, 6]])
+/// let m2 : Matrix<f64> = Matrix::from_array([[1., 2.], [3., 4.], [5., 6.]]);
 /// // [1, 2]
 /// // [3, 4]
 /// // [5, 6]
@@ -34,7 +35,7 @@ use super::errors::MatrixError;
 /// // Multiplying matrices by a scalar
 /// // Multiplying matrices by matrices
 /// // Mapping a function to a matrix
-/// let r = m.dot(m2 * 2.0).map(|x| x.exp());
+/// let r = m.dot(&(m2 * 2.0).map(|x| x * x));
 /// ```
 #[derive(Clone, PartialEq)]
 pub struct Matrix<T> {

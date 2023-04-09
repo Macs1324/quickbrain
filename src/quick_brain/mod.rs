@@ -122,9 +122,14 @@ impl Layer for Dense {
 /// A sequential model
 /// ## Example
 /// ```
+/// use quickbrain::quick_brain::Dense;
+/// use quickbrain::quick_brain::Activation;
+/// use quickbrain::quick_brain::Sequential;
+/// use quickbrain::quick_grad::grad_tape::GradTape;
+/// let t = GradTape::new();
 /// let mut model = Sequential::new();
-/// model.add_layer(Dense::new(2, 3, Activation::Sigmoid));
-/// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
+/// model.add_layer(Dense::new(&t, 2, 3, Activation::Sigmoid));
+/// model.add_layer(Dense::new(&t, 3, 1, Activation::Sigmoid));
 /// ```
 pub struct Sequential {
     pub layers: Vec<Box<dyn Layer>>,
@@ -134,9 +139,12 @@ impl Sequential {
     /// # New
     /// Creates a new Sequential model
     /// ```
+    /// use quickbrain::quick_brain::{Sequential, Dense, Activation};
+    /// use quickbrain::quick_grad::grad_tape::GradTape;
+    /// let mut t = GradTape::new();
     /// let mut model = Sequential::new();
-    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
-    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
+    /// model.add_layer(Dense::new(&t, 2, 3, Activation::ReLU));
+    /// model.add_layer(Dense::new(&t, 3, 1, Activation::Sigmoid));
     /// ```
     pub fn new() -> Sequential {
         Sequential { layers: vec![] }
@@ -146,8 +154,13 @@ impl Sequential {
     /// Adds a layer to the model
     /// The layer must implement the Layer trait
     /// ```
+    /// use quickbrain::quick_brain::Dense;
+    /// use quickbrain::quick_brain::Activation;
+    /// use quickbrain::quick_brain::Sequential;
+    /// use quickbrain::quick_grad::grad_tape::GradTape;
+    /// let t = GradTape::new();
     /// let mut model = Sequential::new();
-    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
+    /// model.add_layer(Dense::new(&t, 2, 3, Activation::ReLU));
     /// ```
     pub fn add_layer<L: Layer + 'static>(&mut self, layer: L) {
         self.layers.push(Box::new(layer));
@@ -156,11 +169,18 @@ impl Sequential {
     /// # Forward
     /// Runs the model on the input
     /// ```
+    /// use quickbrain::quick_brain::Dense;
+    /// use quickbrain::quick_brain::Activation;
+    /// use quickbrain::quick_brain::Sequential;
+    /// use quickbrain::quick_grad::grad_tape::GradTape;
+    /// use quickbrain::quick_math::matrix::Matrix;
+    ///
+    /// let t = GradTape::new();
     /// let mut model = Sequential::new();
-    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
-    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
-    /// let input = Matrix::new(vec![vec![2.0, 1.0]]);
-    /// let output = model.forward(&input);
+    /// model.add_layer(Dense::new(&t, 2, 3, Activation::ReLU));
+    /// model.add_layer(Dense::new(&t, 3, 1, Activation::Sigmoid));
+    /// let input = Matrix::g_from_array(&t, [[2.0, 1.0]]).transpose(&t);
+    /// let output = model.forward(&t, &input);
     /// ```
     pub fn forward(&self, tape: &GradTape, input: &Matrix) -> Matrix {
         let mut r = input.clone();
@@ -176,9 +196,14 @@ impl Sequential {
     /// # Get Input Shape
     /// Returns the input shape of the model
     /// ```
+    /// use quickbrain::quick_brain::Dense;
+    /// use quickbrain::quick_brain::Activation;
+    /// use quickbrain::quick_brain::Sequential;
+    /// use quickbrain::quick_grad::grad_tape::GradTape;
+    /// let t = GradTape::new();
     /// let mut model = Sequential::new();
-    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
-    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
+    /// model.add_layer(Dense::new(&t, 2, 3, Activation::ReLU));
+    /// model.add_layer(Dense::new(&t, 3, 1, Activation::Sigmoid));
     /// let input_shape = model.get_input_shape(); // [2, 1]
     /// ```
     pub fn get_input_shape(&self) -> Vec<usize> {
@@ -188,9 +213,14 @@ impl Sequential {
     /// # Get Output Shape
     /// Returns the output shape of the model
     /// ```
+    /// use quickbrain::quick_brain::Dense;
+    /// use quickbrain::quick_brain::Activation;
+    /// use quickbrain::quick_brain::Sequential;
+    /// use quickbrain::quick_grad::grad_tape::GradTape;
+    /// let t = GradTape::new();
     /// let mut model = Sequential::new();
-    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
-    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
+    /// model.add_layer(Dense::new(&t, 2, 3, Activation::ReLU));
+    /// model.add_layer(Dense::new(&t, 3, 1, Activation::Sigmoid));
     /// let output_shape = model.get_output_shape(); // [1, 1]
     /// ```
     pub fn get_output_shape(&self) -> Vec<usize> {
@@ -200,9 +230,15 @@ impl Sequential {
     /// # Parameters
     /// Returns a vector of the parameters of the model
     /// ```
+    /// use quickbrain::quick_brain::Dense;
+    /// use quickbrain::quick_brain::Activation;
+    /// use quickbrain::quick_brain::Sequential;
+    /// use quickbrain::quick_grad::grad_tape::GradTape;
+    ///
+    /// let t = GradTape::new();
     /// let mut model = Sequential::new();
-    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
-    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
+    /// model.add_layer(Dense::new(&t, 2, 3, Activation::ReLU));
+    /// model.add_layer(Dense::new(&t, 3, 1, Activation::Sigmoid));
     /// let params = model.parameters();
     /// ```
     pub fn parameters(&mut self) -> Vec<&mut Var> {
@@ -218,12 +254,19 @@ impl Sequential {
     /// # Fit
     /// Trains the model on the given dataset
     /// ```
+    /// use quickbrain::quick_brain::Dense;
+    /// use quickbrain::quick_brain::Activation;
+    /// use quickbrain::quick_brain::Sequential;
+    /// use quickbrain::quick_grad::grad_tape::GradTape;
+    /// use quickbrain::quick_math::matrix::Matrix;
+    /// use quickbrain::quick_brain::cost::Cost;
+    /// let t = GradTape::new();
     /// let mut model = Sequential::new();
-    /// model.add_layer(Dense::new(2, 3, Activation::Relu));
-    /// model.add_layer(Dense::new(3, 1, Activation::Sigmoid));
-    /// let mut x = Matrix::new(vec![vec![2.0, 1.0]]);
-    /// let mut y = Matrix::new(vec![vec![1.0]]);
-    /// model.fit(&mut x, &mut y, 100, 0.1, Cost::MSE);
+    /// model.add_layer(Dense::new(&t, 2, 3, Activation::ReLU));
+    /// model.add_layer(Dense::new(&t, 3, 1, Activation::Sigmoid));
+    /// let mut x = Matrix::g_from_array(&t, [[2.0, 1.0]]).transpose(&t);
+    /// let mut y = Matrix::g_from_array(&t, [[1.0]]);
+    /// model.fit(&t, &mut x, &mut y, 100, 0.1, Cost::MSE);
     /// ```
     pub fn fit(
         &mut self,
