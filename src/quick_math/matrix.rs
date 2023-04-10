@@ -7,7 +7,7 @@ use rand::random;
 
 use crate::quick_grad::{grad_tape::GradTape, var::Var};
 
-use super::errors::MatrixError;
+use super::{errors::MatrixError, tensor::Tensor};
 
 /// # Struct **Matrix**
 /// A classic implementation of the Matrix data structure
@@ -178,6 +178,67 @@ impl<T: Copy> Matrix<T> {
             cols: self.cols * times,
             data,
         }
+    }
+}
+
+impl<T: Copy> Tensor<T> for Matrix<T> {
+    fn get_data(&self) -> &Vec<T> {
+        &self.data
+    }
+
+    fn get_data_mut(&mut self) -> &mut Vec<T> {
+        &mut self.data
+    }
+
+    fn map(&self, f: fn(T) -> T) -> Self {
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data: self.data.iter().copied().map(f).collect::<Vec<_>>(),
+        }
+    }
+
+    fn reshape(&self, shape: Vec<usize>) -> Self {
+        Matrix {
+            rows: shape[0],
+            cols: shape[1],
+            data: self.data.clone(),
+        }
+    }
+
+    fn cat(&self, other: &Self, axis: usize) -> Self {
+        if axis == 0 {
+            let mut data = self.data.clone();
+            data.extend(other.data.clone());
+            Matrix {
+                rows: self.rows + other.rows,
+                cols: self.cols,
+                data,
+            }
+        } else {
+            let mut data = vec![];
+            for i in 0..self.rows {
+                data.extend(self.get_row_slice(i).to_vec());
+                data.extend(other.get_row_slice(i).to_vec());
+            }
+            Matrix {
+                rows: self.rows,
+                cols: self.cols + other.cols,
+                data,
+            }
+        }
+    }
+
+    fn into_matrix(&self) -> Matrix<T> {
+        Matrix {
+            rows: self.rows,
+            cols: self.cols,
+            data: self.data.clone(),
+        }
+    }
+
+    fn get_shape(&self) -> Vec<usize> {
+        vec![self.rows, self.cols]
     }
 }
 
