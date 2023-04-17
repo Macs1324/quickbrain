@@ -20,4 +20,9 @@ pub enum MatrixError {
         numel: usize,
         forcing_into: usize,
     },
+
+    InvalidShape {
+        numel: usize,
+        forcing_into: Vec<usize>,
+    },
 }

@@ -63,6 +63,20 @@ impl<T: Debug> Debug for Matrix<T> {
 }
 
 impl<T: Copy> Matrix<T> {
+    pub fn from_data_and_shape(data: Vec<T>, shape: Vec<usize>) -> Result<Self, MatrixError> {
+        if data.len() != shape.iter().product::<usize>() {
+            return Err(MatrixError::InvalidShape {
+                numel: data.len(),
+                forcing_into: shape.clone(),
+            });
+        }
+
+        Ok(Matrix {
+            rows: shape[0],
+            cols: shape[1],
+            data,
+        })
+    }
     /// # Get Data
     /// Returns a reference to the plain vector holding the raw data of the matrix
     /// Likely not an useful method
