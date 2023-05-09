@@ -1,48 +1,56 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Shape<const R: usize> {
-    pub shape: [usize; R],
+use std::ops::Index;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// # Shape
+// A struct representing the shape of a tensor or a matrix.
+// R : The rank of the tensor
+pub struct Shape {
+    pub shape: Vec<usize>,
 }
 
-impl<const R: usize> Shape<R> {
-    pub fn new(shape: [usize; R]) -> Shape<R> {
-        Shape { shape }
+impl Shape {
+    pub fn new<const R: usize>(shape: [usize; R]) -> Shape {
+        Shape {
+            shape: shape.iter().copied().collect(),
+        }
     }
 
     pub fn numel(&self) -> usize {
         self.shape.iter().product()
     }
 
-    pub fn reshape(&self, shape: [usize; R]) -> Shape<R> {
-        Shape { shape }
+    pub fn reshape(&self, shape: &Shape) -> Shape {
+        Shape { shape: shape.shape.clone() }
     }
-}
-
-impl Shape<1> {
     pub fn x(&self) -> usize {
         self.shape[0]
     }
-}
-
-impl Shape<2> {
-    pub fn x(&self) -> usize {
-        self.shape[0]
-    }
-
     pub fn y(&self) -> usize {
         self.shape[1]
     }
-}
-
-impl Shape<3> {
-    pub fn x(&self) -> usize {
-        self.shape[0]
-    }
-
-    pub fn y(&self) -> usize {
-        self.shape[1]
-    }
-
     pub fn z(&self) -> usize {
         self.shape[2]
+    }
+
+    pub fn rows(&self) -> usize {
+        self.shape[0]
+    }
+    pub fn cols(&self) -> usize {
+        self.shape[1]
+    }
+}
+
+impl Index<usize> for Shape {
+    type Output = usize;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.shape[index]
+    }
+}
+
+impl Iterator for Shape {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.shape.iter().copied().next()
     }
 }
