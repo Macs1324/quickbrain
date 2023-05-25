@@ -29,6 +29,10 @@ pub trait Tensor<T: Copy> {
     /// # Get Shape
     /// Returns the shape of the tensor
     fn get_shape(&self) -> Shape;
+    /// # Index
+    fn get(&self, index: Shape) -> Result<Self, TensorError>
+    where
+        Self: Sized;
 
     fn apply(&mut self, f: fn(T) -> T) {
         let data = self.get_data_mut();

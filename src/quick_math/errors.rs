@@ -11,7 +11,7 @@ use super::shape::Shape;
 pub enum TensorError {
     ElementwiseDimensionsMismatch { size_1: Shape, size_2: Shape },
     MatMulDimensionsMismatch { size_1: Shape, size_2: Shape },
-    InvalidIndex,
+    InvalidIndex { indexing: Shape, size: Shape },
     InvalidReshape { numel: usize, forcing_into: usize },
 
     InvalidShape { numel: usize, forcing_into: Shape },

@@ -1,11 +1,8 @@
+use std::unimplemented;
+
 use crate::quick_grad::{grad_tape::GradTape, var::Var};
 
-use super::{
-    errors::TensorError,
-    matrix::Matrix,
-    shape::Shape,
-    tensor::Tensor,
-};
+use super::{errors::TensorError, matrix::Matrix, shape::Shape, tensor::Tensor};
 
 pub struct NDArray<T: Copy> {
     pub data: Vec<T>,
@@ -52,6 +49,13 @@ impl<T: Copy> Tensor<T> for NDArray<T> {
         }
     }
 
+    fn get(&self, index: Shape) -> Result<Self, TensorError>
+    where
+        Self: Sized,
+    {
+        unimplemented!();
+    }
+
     fn get_shape(&self) -> Shape {
         self.shape.clone()
     }
@@ -74,5 +78,20 @@ impl<T: Copy> Tensor<T> for NDArray<T> {
                 shape: vec![self.shape[0], self.shape[1]],
             },
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_ndarray() {
+        let _t = NDArray::one(Shape::new([3, 4, 2]));
+    }
+
+    #[test]
+    fn index_ndarray() {
+        let _t = NDArray::one(Shape::new([3, 4, 2]));
     }
 }

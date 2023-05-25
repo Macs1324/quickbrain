@@ -256,6 +256,23 @@ impl<T: Copy> Tensor<T> for Matrix<T> {
     fn get_shape(&self) -> Shape {
         Shape::new([self.rows, self.cols])
     }
+
+    fn get(&self, index: Shape) -> Result<Self, TensorError>
+    where
+        Self: Sized,
+    {
+        if index.shape.len() != 2 {
+            return Err(TensorError::InvalidIndex {
+                indexing: index,
+                size: self.get_shape(),
+            });
+        }
+
+        Matrix::from_data_and_shape(
+            vec![self.data[index.x() * self.get_cols() + index.y()]],
+            Shape::new([1, 1]),
+        )
+    }
 }
 
 impl Matrix<f64> {
