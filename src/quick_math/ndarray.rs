@@ -4,6 +4,7 @@ use crate::quick_grad::{grad_tape::GradTape, var::Var};
 
 use super::{errors::TensorError, matrix::Matrix, shape::Shape, tensor::Tensor};
 
+#[derive(Clone)]
 pub struct NDArray<T: Copy> {
     pub data: Vec<T>,
     pub shape: Shape,
@@ -53,7 +54,40 @@ impl<T: Copy> Tensor<T> for NDArray<T> {
     where
         Self: Sized,
     {
-        unimplemented!();
+        if index.rank() == 0 {
+            return Ok(self.clone());
+        }
+
+        if self.shape.rank() < index.rank() {
+            return Err(TensorError::InvalidIndex {
+                indexing: index,
+                size: self.shape.clone(),
+            });
+        }
+
+        let slice_shape: Shape = self
+            .shape
+            .clone()
+            .into_iter()
+            .skip(1)
+            .collect::<Vec<_>>()
+            .into();
+        let slice_numel = slice_shape.clone().into_iter().product();
+        let major_index = index.shape[0];
+
+        let slice = NDArray {
+            data: self
+                .data
+                .iter()
+                .skip(slice_numel * major_index)
+                .take(slice_numel)
+                .collect(),
+            shape: slice_shape,
+        };
+
+        let slice_index: Shape = index.into_iter().skip(1).collect::<Vec<_>>().into();
+
+        self.get(slice_index)
     }
 
     fn get_shape(&self) -> Shape {

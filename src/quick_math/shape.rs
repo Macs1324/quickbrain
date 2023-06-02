@@ -1,4 +1,4 @@
-use std::ops::Index;
+use std::{ops::Index, usize};
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 // # Shape
 // A struct representing the shape of a tensor or a matrix.
@@ -58,5 +58,11 @@ impl Iterator for Shape {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.shape.iter().copied().next()
+    }
+}
+
+impl From<Vec<usize>> for Shape {
+    fn from(value: Vec<usize>) -> Self {
+        Shape { shape: value }
     }
 }

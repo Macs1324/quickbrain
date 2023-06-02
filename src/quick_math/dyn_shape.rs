@@ -2,7 +2,7 @@ use std::usize;
 
 use super::shape::Shape;
 
-enum DynShapeError {
+pub enum DynShapeError {
     FailedResolveMoreThanOneEmptyDimension,
     FailedResolveInvalidNumel,
 }
@@ -35,7 +35,7 @@ impl DynShape {
                 if indexof_empty.is_none() {
                     indexof_empty = Some(i);
                 } else {
-                    return DynShapeError::FailedResolveMoreThanOneEmptyDimension;
+                    return Err(DynShapeError::FailedResolveMoreThanOneEmptyDimension);
                 }
             } else {
                 current_numel *= dim.unwrap();
@@ -43,15 +43,15 @@ impl DynShape {
         }
 
         if numel % current_numel != 0 {
-            return DynShapeError::FailedResolveInvalidNumel;
+            return Err(DynShapeError::FailedResolveInvalidNumel);
         }
         let missing_dim = numel / current_numel;
 
         let mut shape = self.dyn_shape.clone();
-        shape[indexof_empty] = missing_dim;
+        shape[indexof_empty.unwrap()] = Some(missing_dim);
 
         Ok(Shape {
-            shape: shape.iter().map(|x| x.unwrap()),
+            shape: shape.iter().map(|x| x.unwrap()).collect::<Vec<_>>().into(),
         })
     }
 }
