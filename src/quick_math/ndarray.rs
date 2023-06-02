@@ -1,5 +1,3 @@
-use std::unimplemented;
-
 use crate::quick_grad::{grad_tape::GradTape, var::Var};
 
 use super::{errors::TensorError, matrix::Matrix, shape::Shape, tensor::Tensor};
@@ -78,7 +76,8 @@ impl<T: Copy> Tensor<T> for NDArray<T> {
         let slice = NDArray {
             data: self
                 .data
-                .iter()
+                .clone()
+                .into_iter()
                 .skip(slice_numel * major_index)
                 .take(slice_numel)
                 .collect(),
@@ -87,7 +86,7 @@ impl<T: Copy> Tensor<T> for NDArray<T> {
 
         let slice_index: Shape = index.into_iter().skip(1).collect::<Vec<_>>().into();
 
-        self.get(slice_index)
+        Ok(slice.get(slice_index)?)
     }
 
     fn get_shape(&self) -> Shape {
