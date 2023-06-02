@@ -19,7 +19,9 @@ impl Shape {
     }
 
     pub fn reshape(&self, shape: &Shape) -> Shape {
-        Shape { shape: shape.shape.clone() }
+        Shape {
+            shape: shape.shape.clone(),
+        }
     }
     pub fn x(&self) -> usize {
         self.shape[0]
@@ -36,6 +38,10 @@ impl Shape {
     }
     pub fn cols(&self) -> usize {
         self.shape[1]
+    }
+
+    pub fn rank(&self) -> usize {
+        self.shape.len()
     }
 }
 
