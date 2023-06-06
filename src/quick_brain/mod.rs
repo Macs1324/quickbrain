@@ -305,6 +305,8 @@ impl Sequential {
 
 #[cfg(test)]
 mod test {
+    use crate::quick_math::shape::Shape;
+
     use super::*;
 
     #[test]
@@ -320,7 +322,7 @@ mod test {
         let input = Matrix::g_rand(&mut t, 2, 1);
         let out_shape = m.forward(&mut t, &input).get_shape();
 
-        assert_eq!(out_shape, vec![3usize, 1]);
+        assert_eq!(out_shape, Shape::new([3usize, 1]));
     }
 
     #[test]
@@ -336,7 +338,7 @@ mod test {
         let input = Matrix::g_rand(&mut t, 2, 10);
         let out_shape = m.forward(&mut t, &input).get_shape();
 
-        assert_eq!(out_shape, vec![3usize, 10]);
+        assert_eq!(out_shape, Shape::new([3usize, 10]));
     }
 
     #[test]

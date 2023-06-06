@@ -7,7 +7,7 @@ use rand::random;
 
 use crate::quick_grad::{grad_tape::GradTape, var::Var};
 
-use super::{errors::MatrixError, tensor::Tensor};
+use super::{errors::TensorError, shape::Shape, tensor::Tensor};
 
 /// # Struct **Matrix**
 /// A classic implementation of the Matrix data structure
@@ -63,6 +63,20 @@ impl<T: Debug> Debug for Matrix<T> {
 }
 
 impl<T: Copy> Matrix<T> {
+    pub fn from_data_and_shape(data: Vec<T>, shape: Shape) -> Result<Self, TensorError> {
+        if data.len() != shape.shape.iter().product::<usize>() {
+            return Err(TensorError::InvalidShape {
+                numel: data.len(),
+                forcing_into: shape.clone(),
+            });
+        }
+
+        Ok(Matrix {
+            rows: shape[0],
+            cols: shape[1],
+            data,
+        })
+    }
     /// # Get Data
     /// Returns a reference to the plain vector holding the raw data of the matrix
     /// Likely not an useful method
@@ -76,8 +90,10 @@ impl<T: Copy> Matrix<T> {
 
     /// # Get Shape
     /// Returns a [`Vec<usize>`] representing the shape of the Matrix
-    pub fn get_shape(&self) -> Vec<usize> {
-        vec![self.rows, self.cols]
+    pub fn get_shape(&self) -> Shape {
+        Shape {
+            shape: vec![self.rows, self.cols],
+        }
     }
 
     /// # Get row slice
@@ -146,11 +162,11 @@ impl<T: Copy> Matrix<T> {
     }
 
     /// # Reshape
-    /// Returns [MatrixError::InvalidReshape] if the data doesn't fit the new size
+    /// Returns [TensorError::InvalidReshape] if the data doesn't fit the new size
     /// Returns the reshaped matrix otherwise
-    pub fn reshape(&self, new_rows: usize, new_cols: usize) -> Result<Matrix<T>, MatrixError> {
+    pub fn reshape(&self, new_rows: usize, new_cols: usize) -> Result<Matrix<T>, TensorError> {
         if (self.rows * self.cols) != (new_rows * new_cols) {
-            Err(MatrixError::InvalidReshape {
+            Err(TensorError::InvalidReshape {
                 numel: self.get_rows() * self.get_cols(),
                 forcing_into: new_rows * new_cols,
             })
@@ -198,12 +214,12 @@ impl<T: Copy> Tensor<T> for Matrix<T> {
         }
     }
 
-    fn reshape(&self, shape: Vec<usize>) -> Self {
-        Matrix {
-            rows: shape[0],
-            cols: shape[1],
+    fn reshape(&self, shape: Shape) -> Result<Self, TensorError> {
+        Ok(Matrix {
+            rows: shape.rows(),
+            cols: shape.cols(),
             data: self.data.clone(),
-        }
+        })
     }
 
     fn cat(&self, other: &Self, axis: usize) -> Self {
@@ -229,16 +245,33 @@ impl<T: Copy> Tensor<T> for Matrix<T> {
         }
     }
 
-    fn into_matrix(&self) -> Matrix<T> {
-        Matrix {
+    fn into_matrix(&self) -> Result<Matrix<T>, TensorError> {
+        Ok(Matrix {
             rows: self.rows,
             cols: self.cols,
             data: self.data.clone(),
-        }
+        })
     }
 
-    fn get_shape(&self) -> Vec<usize> {
-        vec![self.rows, self.cols]
+    fn get_shape(&self) -> Shape {
+        Shape::new([self.rows, self.cols])
+    }
+
+    fn get(&self, index: Shape) -> Result<Self, TensorError>
+    where
+        Self: Sized,
+    {
+        if index.shape.len() != 2 {
+            return Err(TensorError::InvalidIndex {
+                indexing: index,
+                size: self.get_shape(),
+            });
+        }
+
+        Matrix::from_data_and_shape(
+            vec![self.data[index.x() * self.get_cols() + index.y()]],
+            Shape::new([1, 1]),
+        )
     }
 }
 
@@ -305,9 +338,9 @@ impl Matrix<f64> {
     }
     /// # Dot
     /// Returns the result of a Matrix multiplication operation -> Dot product
-    pub fn dot(&self, other: &Matrix<f64>) -> Result<Matrix<f64>, MatrixError> {
+    pub fn dot(&self, other: &Matrix<f64>) -> Result<Matrix<f64>, TensorError> {
         if self.cols != other.get_rows() {
-            return Err(MatrixError::MatMulDimensionsMismatch {
+            return Err(TensorError::MatMulDimensionsMismatch {
                 size_1: self.get_shape(),
                 size_2: other.get_shape(),
             });
@@ -405,9 +438,9 @@ impl Matrix<Var> {
 
     /// # Dot
     /// Returns the result of a Matrix multiplication operation -> Dot product
-    pub fn g_dot(&self, tape: &GradTape, other: &Matrix<Var>) -> Result<Matrix<Var>, MatrixError> {
+    pub fn g_dot(&self, tape: &GradTape, other: &Matrix<Var>) -> Result<Matrix<Var>, TensorError> {
         if self.cols != other.get_rows() {
-            return Err(MatrixError::MatMulDimensionsMismatch {
+            return Err(TensorError::MatMulDimensionsMismatch {
                 size_1: self.get_shape(),
                 size_2: other.get_shape(),
             });
